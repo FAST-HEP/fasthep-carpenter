@@ -4,7 +4,7 @@ build-backend = "flit_core.buildapi"
 
 
 [project]
-name = "fasthep-carpenter"
+name = "fasthep_carpenter"
 authors = [
   { name = "Ben Krikler", email = "fast-hep@cern.ch" },
   { name = "Luke Kreczko", email = "fast-hep@cern.ch" },
