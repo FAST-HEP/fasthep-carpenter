@@ -1,7 +1,8 @@
 import os
-from pathlib import Path
-import rich
 import sys
+from pathlib import Path
+
+import rich
 import typer
 
 from .utils import mkdir_p
@@ -12,11 +13,17 @@ app = typer.Typer()
 @app.command()
 def main(
     dataset_cfg: Path = typer.Argument(
-        ..., help="Dataset config to run over", exists=True, readable=True,
+        ...,
+        help="Dataset config to run over",
+        exists=True,
+        readable=True,
         resolve_path=True,
     ),
     sequence_cfg: Path = typer.Argument(
-        ..., help="Config for how to process dataset", exists=True, readable=True,
+        ...,
+        help="Config for how to process dataset",
+        exists=True,
+        readable=True,
     ),
     output_dir: str = typer.Option(
         "output", "--outdir", "-o", help="Where to save the results"
@@ -31,6 +38,7 @@ def main(
     try:
         import fast_curator
         import fast_flow.v1
+
         from . import backends, bookkeeping, data_import
         from .settings import CarpenterSettings
     except ImportError as e:
