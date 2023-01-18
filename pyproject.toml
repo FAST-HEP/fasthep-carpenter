@@ -119,4 +119,4 @@ profile = "black"
 known_third_party = ["typer", "click"]
 
 [project.scripts]
-fasthep_carpenter = "fasthep_carpenter.main:main"
+fasthep_carpenter = "fasthep_carpenter.main:app"
