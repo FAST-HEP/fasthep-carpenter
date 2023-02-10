@@ -1,5 +1,7 @@
 from collections import namedtuple
 import numpy as np
+from typing import Any
+
 
 FakeEventRange = namedtuple("FakeEventRange", "start_entry stop_entry entries_in_block")
 
@@ -10,24 +12,24 @@ class Namespace():
 
 
 class FakeBEEvent(object):
-    def __init__(self, tree, eventtype):
+    def __init__(self, tree: Any, eventtype: str):
         self.tree = tree
         self.config = Namespace(dataset=Namespace(eventtype=eventtype))
 
-    def __len__(self):
+    def __len__(self) -> int:
         return len(self.tree)
 
-    def count_nonzero(self):
+    def count_nonzero(self) -> int:
         return self.tree.count_nonzero()
 
-    def arrays(self, array_names, library="np", outputtype=list):
+    def arrays(self, array_names: list[str], library: str = "np", outputtype: Any = list) -> list[Any]:
         return [self.tree[name] for name in array_names]
 
 
 class FakeTree(dict):
     length: int = 101
 
-    def __init__(self, length=101):
+    def __init__(self, length: int = 101):
         super(FakeTree, self).__init__(
             NMuon=np.linspace(0, 5., length),
             NElectron=np.linspace(0, 10, length),
@@ -35,8 +37,8 @@ class FakeTree(dict):
         )
         self.length = length
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.length
 
-    def arrays(self, array_names, library="np", outputtype=list):
+    def arrays(self, array_names: list[str], library: str = "np", outputtype=list) -> list[Any]:
         return [self[name] for name in array_names]
