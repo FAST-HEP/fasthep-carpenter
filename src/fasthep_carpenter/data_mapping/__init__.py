@@ -4,6 +4,7 @@ from functools import partial
 from typing import Any, Dict, List, Protocol
 
 from ..protocols import ArrayMethodsProtocol, DataConnector, DataMapping, FileLike
+from ..utils import register_in_collection, unregister_from_collection
 
 from .array_methods import Uproot4Methods
 from .connectors import (
@@ -29,38 +30,20 @@ __all__ = [
     "FileConnector",
 ]
 
+register_data_connector = partial(register_in_collection, DATA_CONNECTORS, "Data connectors")
+unregister_data_connector = partial(unregister_from_collection, DATA_CONNECTORS, "Data connectors")
 
-def __register__(
-    collection: Dict[str, Any], collection_name: str, name: str, obj: Any
-) -> None:
-    if name in collection:
-        raise ValueError(f"{collection_name} {name} already registered.")
-    collection[name] = obj
-
-
-def __unregister__(
-    collection: Dict[str, Any], collection_name: str, name: str, obj: Any
-) -> None:
-    if name not in collection:
-        raise ValueError(f"{collection_name} {name} not registered.")
-    collection[name].pop()
-
-
-register_data_connector = partial(__register__, DATA_CONNECTORS, "Data connectors")
-unregister_data_connector = partial(__unregister__, DATA_CONNECTORS, "Data connectors")
-
-register_array_methods = partial(__register__, ARRAY_METHODS, "Array methods")
-unregister_array_methods = partial(__unregister__, ARRAY_METHODS, "Array methods")
+register_array_methods = partial(register_in_collection, ARRAY_METHODS, "Array methods")
+unregister_array_methods = partial(unregister_from_collection, ARRAY_METHODS, "Array methods")
 
 register_data_connector("tree", TreeConnector)
 register_data_connector("file", FileConnector)
 register_array_methods("uproot4", Uproot4Methods)
 
 
-
 def __create_mapping_with_tree_connector__(
     input_file: FileLike, treenames: str, methods: str
-):
+) -> DataMapping:
     if len(treenames) > 1:
         raise NotImplementedError(
             "Multiple trees not supported by the TreeConnector. Please use a different connector."
@@ -76,7 +59,7 @@ def __create_mapping_with_tree_connector__(
 
 def __create_mapping_with_file_connector__(
     input_file: FileLike, treenames: str, methods: str
-):
+) -> DataMapping:
     return DataMapping(
         connector=DATA_CONNECTORS["file"](
             file_handle=input_file, methods=ARRAY_METHODS[methods], treenames=treenames
@@ -86,7 +69,7 @@ def __create_mapping_with_file_connector__(
     )
 
 
-def create_mapping(input_file: FileLike, treenames: str, methods: str, connector: str):
+def create_mapping(input_file: FileLike, treenames: str, methods: str, connector: str) -> DataMapping:
     if connector == "tree":
         return __create_mapping_with_tree_connector__(input_file, treenames, methods)
     if connector == "file":
