@@ -1,6 +1,7 @@
 """Stages for defining new variables"""
 
 from ..protocols import DataMapping, ProcessingStep, ProcessingStepResult
+from ..expressions import process_expression
 
 VariableDefinition = dict[str, str]
 
@@ -27,7 +28,7 @@ class Define(ProcessingStep):
     def __call__(self, data: DataMapping) -> ProcessingStepResult:
         results = {}
         for name, expression in self._variables.items():
-            result = data.evaluate(expression)
+            result = process_expression(data, expression)
             results[name] = result
             data.add_variable(name, result)
 
