@@ -33,92 +33,6 @@ class DataImportPlugin(ABC):
 
 
 @dataclass
-class ProcessingStepResult:
-    data: Any
-    error_code: int
-    error_message: str
-    result: Any
-    bookkeeping: dict[str, Any] = None
-    rtype: str = None
-    reducer = Callable[[Any], Any]
-
-
-class ProcessingStep(Protocol):
-    """
-    A processing step is a callable that takes a dictionary of datasets and returns a dictionary of results.
-    A processing step should not write to disk.
-    """
-
-    def __call__(self, data: Dict[str, Any]) -> ProcessingStepResult:
-        ...
-
-
-class ProcessingBackend(Protocol):
-    """
-    A processing backend is class that implements the configure and execute methods.
-    """
-
-    _config: Dict[str, Any] = {}
-
-    def configure(self, **kwargs: Dict[str, Any]) -> None:
-        """
-          Passes configuration to the backend.
-        """
-        pass
-
-    def execute(
-        self,
-        sequence: Dict[str, ProcessingStep],
-        datasets: Dict[str, Any],
-        args,
-        plugins,
-    ) -> Tuple[Any, Any]:
-        """
-            Executes the processing sequence on the datasets.
-        """
-        pass
-
-
-class Collector(Protocol):
-    """
-    A collector is a callable that takes a dictionary of datasets and returns merged results or writes to disk.
-    """
-
-    def __call__(self, data: Dict[str, Any]) -> Any:
-        ...
-
-
-@dataclass
-class InputData:
-    """
-    A class to hold the input data and to provide some helper methods.
-    """
-    datasets: List[Any]
-
-    @property
-    def files_by_dataset(self) -> Dict[str, List[str]]:
-        return {d.name: d.files for d in self.datasets}
-
-    @property
-    def files(self) -> List[str]:
-        return [f for d in self.datasets for f in d.files]
-
-    @staticmethod
-    def dataset_type(dataset: Any) -> str:
-        return "data" if dataset.name == "data" else "mc"
-
-
-class Collector(Protocol):
-    def __call__(self, *results: list[ProcessingStepResult], **kwargs) -> ProcessingStepResult:
-        rtypes = [result.rtype for result in results]
-        reducible = all([rtype == rtypes[0] for rtype in rtypes])
-        reducible = reducible and all([result.reducer is not None for result in results])
-        if not reducible:
-            raise RuntimeError("Cannot reduce results of different types")
-        return reduce(self.reducer, results)
-
-
-@dataclass
 class EventRange:
     start: int = 0
     stop: int = -1
@@ -495,3 +409,87 @@ class DataMapping(MutableMapping):
 
     def apply_mask(self, mask):
         self._data_wrappers = [MaskedDataWrapper(mask=mask)] + self._data_wrappers
+
+################
+# Processing
+################
+
+
+@dataclass
+class ProcessingStepResult:
+    data: Any
+    error_code: int
+    error_message: str
+    result: Any
+    bookkeeping: dict[str, Any] = None
+    rtype: str = None
+    reducer = Callable[[Any], Any]
+
+
+class ProcessingStep(Protocol):
+    """
+    A processing step is a callable that takes a dictionary of datasets and returns a dictionary of results.
+    A processing step should not write to disk.
+    """
+    name: str
+
+    def __call__(self, data: Dict[str, Any]) -> ProcessingStepResult:
+        ...
+
+
+class ProcessingBackend(Protocol):
+    """
+    A processing backend is class that implements the configure and execute methods.
+    """
+
+    _config: Dict[str, Any] = {}
+
+    def configure(self, **kwargs: Dict[str, Any]) -> None:
+        """
+          Passes configuration to the backend.
+        """
+        pass
+
+    def execute(
+        self,
+        sequence: Dict[str, ProcessingStep],
+        datasets: Dict[str, Any],
+        args,
+        plugins,
+    ) -> Tuple[Any, Any]:
+        """
+            Executes the processing sequence on the datasets.
+        """
+        pass
+
+@dataclass
+class InputData:
+    """
+    A class to hold the input data and to provide some helper methods.
+    """
+    datasets: List[Any]
+
+    @property
+    def files_by_dataset(self) -> Dict[str, List[str]]:
+        return {d.name: d.files for d in self.datasets}
+
+    @property
+    def files(self) -> List[str]:
+        return [f for d in self.datasets for f in d.files]
+
+    @staticmethod
+    def dataset_type(dataset: Any) -> str:
+        return "data" if dataset.name == "data" else "mc"
+
+
+class Collector():
+    """
+    A collector is a callable that takes a dictionary of datasets and returns merged results or writes to disk.
+    """
+    def __call__(self, *results: list[ProcessingStepResult], **kwargs) -> ProcessingStepResult:
+        rtypes = [result.rtype for result in results]
+        reducible = all([rtype == rtypes[0] for rtype in rtypes])
+        reducible = reducible and all([result.reducer is not None for result in results])
+        if not reducible:
+            raise RuntimeError("Cannot reduce results of different types")
+        return reduce(self.reducer, results)
