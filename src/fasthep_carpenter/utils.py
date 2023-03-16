@@ -1,3 +1,4 @@
+import hashlib
 import os
 from pathlib import Path
 from typing import Any, Dict
@@ -31,3 +32,8 @@ def unregister_from_collection(
     if name not in collection:
         raise ValueError(f"{collection_name} {name} not registered.")
     collection[name].pop()
+
+
+def string_to_short_hash(string: str) -> str:
+    """Convert a string to a short hash."""
+    return hashlib.sha1(string.encode()).hexdigest()[:8]
