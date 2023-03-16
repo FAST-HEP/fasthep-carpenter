@@ -21,7 +21,7 @@ class Define(ProcessingStep):
     _name: str
     _variables = list[VariableDefinition]
 
-    def __init__(self, name: str, variables: list[VariableDefinition]) -> None:
+    def __init__(self, name: str, variables: list[VariableDefinition], **kwargs) -> None:
         self._name = name
         self._variables = variables
 
@@ -40,3 +40,7 @@ class Define(ProcessingStep):
             bookkeeping={self._name: self._variables},
             # reducer=None,
         )
+
+    @property
+    def name(self) -> str:
+        return self._name
