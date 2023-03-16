@@ -42,3 +42,7 @@ class FakeTree(dict):
 
     def arrays(self, array_names: list[str], library: str = "np", outputtype=list) -> list[Any]:
         return [self[name] for name in array_names]
+
+
+class DummyMapping(dict):
+    pass
