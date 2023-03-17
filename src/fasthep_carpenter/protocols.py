@@ -462,6 +462,7 @@ class ProcessingBackend(Protocol):
         """
         pass
 
+
 @dataclass
 class InputData:
     """
@@ -486,6 +487,7 @@ class Collector():
     """
     A collector is a callable that takes a dictionary of datasets and returns merged results or writes to disk.
     """
+
     def __call__(self, *results: list[ProcessingStepResult], **kwargs) -> ProcessingStepResult:
         rtypes = [result.rtype for result in results]
         reducible = all([rtype == rtypes[0] for rtype in rtypes])
@@ -493,3 +495,7 @@ class Collector():
         if not reducible:
             raise RuntimeError("Cannot reduce results of different types")
         return reduce(self.reducer, results)
+
+
+# very general task definition
+Task = tuple[Callable[[Any], Any], Any]

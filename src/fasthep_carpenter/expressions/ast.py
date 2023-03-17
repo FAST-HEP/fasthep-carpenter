@@ -5,7 +5,7 @@ from collections import defaultdict
 from functools import partial
 from astor import to_source
 
-from ..protocols import DataMapping
+from ..protocols import DataMapping, Task
 from .custom import SUPPORTED_FUNCTIONS
 from .symbols import symbol_to_str
 
@@ -110,9 +110,6 @@ def ast_to_expression(node: ast.AST) -> str:
         return f"{ast_to_expression(node.left)} {symbol_to_str(node.op)} {ast_to_expression(node.right)}"
     elif isinstance(node, ast.UnaryOp):
         return f"{symbol_to_str(node.op)}{ast_to_expression(node.operand)}"
-
-
-Task = tuple[Any]
 
 
 class ASTWrapper:
