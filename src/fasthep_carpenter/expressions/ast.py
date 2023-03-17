@@ -111,17 +111,21 @@ def ast_to_expression(node: ast.AST) -> str:
     elif isinstance(node, ast.UnaryOp):
         return f"{symbol_to_str(node.op)}{ast_to_expression(node.operand)}"
 
+
 Task = tuple[Any]
+
 
 class ASTWrapper:
 
     task_counters: dict[str, int]
     tasks: dict[str, Task]
+    last_task: str
 
     def __init__(self, abstrac_syntax_tree) -> None:
         self.ast = abstrac_syntax_tree
         self.tasks = {}
         self.task_counters = defaultdict(int)
+        self.last_task = None
 
     def __repr__(self) -> str:
         return f"ASTWrapper({self.ast})"
@@ -167,9 +171,7 @@ class ASTWrapper:
                     if item is None:
                         slice_args.append(None)
                         continue
-                    print(f"evaluating {item}")
                     slice_args.append(self._build(item, data))
-                    # print("done", slice_args)
 
                 self.tasks[task_name] = (SUPPORTED_FUNCTIONS[var_name], previous_tasks[0], slice_args)
             else:
@@ -179,47 +181,13 @@ class ASTWrapper:
     def build(self, data: DataMapping) -> None:
         self.tasks = {}
         self.task_counters = defaultdict(int)
-        self._build(self.ast, data)
+        self.last_task = self._build(self.ast, data)
 
     def to_tasks(self, data: DataMapping) -> dict[str, Task]:
         if not self.tasks:
             self.build(data)
         return self.tasks
 
-
-# class TaskGraphBuilder:
-#     def __init__(self):
-#         self.tasks = {}
-
-#     def build(self, node):
-#         if isinstance(node, SymbolNode):
-#             key = node.value
-#             if node.slice is not None:
-#                 key = f"{key}{node.slice}"
-#             self.tasks[key] = db.from_sequence([node])
-#         elif isinstance(node, FunctionNode):
-#             key = node.name
-#             if node.slice is not None:
-#                 key = f"{key}{node.slice}"
-#             for argument in node.arguments:
-#                 self.build(argument)
-#             if key in self.tasks:
-#                 self.tasks[key] = self.tasks[key].map(lambda fn, arg: fn(*arg), arg=node.arguments)
-#             else:
-#                 self.tasks[key] = db.from_sequence([node]).map(lambda fn, arg: fn(*arg), arg=node.arguments)
-#         elif isinstance(node, ast.BinOp):
-#             self.build(node.left)
-#             self.build(node.right)
-#             left_key = node.left.value if isinstance(node.left, SymbolNode) else str(node.left)
-#             right_key = node.right.value if isinstance(node.right, SymbolNode) else str(node.right)
-#             key = type(node.op).__name__
-#             if key in self.tasks:
-#                 self.tasks[key] = self.tasks[key].map(lambda x, y: node.op(x, y), self.tasks[left_key], self.tasks[right_key])
-#             else:
-#                 self.tasks[key] = db.map(lambda x, y: node.op(x, y), self.tasks[left_key], self.tasks[right_key])
-
-#     def get_task_graph(self):
-#         return self.tasks
 
 def expression_to_ast(expression):
     tree = ast.parse(expression, mode='eval')
