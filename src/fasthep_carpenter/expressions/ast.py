@@ -5,7 +5,8 @@ from collections import defaultdict
 from functools import partial
 from astor import to_source
 
-from ..protocols import DataMapping, Task
+from ..protocols import DataMapping
+from ..workflow import Task, get_task_number
 from .custom import SUPPORTED_FUNCTIONS
 from .symbols import symbol_to_str
 
@@ -114,22 +115,19 @@ def ast_to_expression(node: ast.AST) -> str:
 
 class ASTWrapper:
 
-    task_counters: dict[str, int]
     tasks: dict[str, Task]
     last_task: str
 
     def __init__(self, abstrac_syntax_tree) -> None:
         self.ast = abstrac_syntax_tree
         self.tasks = {}
-        self.task_counters = defaultdict(int)
         self.last_task = None
 
     def __repr__(self) -> str:
         return f"ASTWrapper({self.ast})"
 
     def _get_task_name(self, task_type: str) -> str:
-        task_id = self.task_counters[task_type]
-        self.task_counters[task_type] += 1
+        task_id = get_task_number(task_type)
         return f"{task_type}-{task_id}"
 
     def _is_pure(self, node: Any) -> bool:
@@ -177,7 +175,6 @@ class ASTWrapper:
 
     def build(self, data: DataMapping) -> None:
         self.tasks = {}
-        self.task_counters = defaultdict(int)
         self.last_task = self._build(self.ast, data)
 
     def to_tasks(self, data: DataMapping) -> dict[str, Task]:
