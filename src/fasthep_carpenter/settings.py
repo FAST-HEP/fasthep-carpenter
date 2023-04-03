@@ -1,7 +1,8 @@
 """ Module for fasthep-carpenter functions and settings """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from typing import Any
 
 
 @dataclass
@@ -16,3 +17,4 @@ class CarpenterSettings:
     nblocks_per_sample: int = -1
     blocksize: int = 1_000_000
     profile: bool = False
+    plugins: dict[str, Any] = field(default_factory=dict)
