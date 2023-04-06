@@ -87,6 +87,7 @@ class Define(ProcessingStep):
         self._tasks = TaskCollection()
 
         previous_definition = None
+        previous_variable = None
         for i, (name, expression) in enumerate(self._variables):
             # TODO: move to task builder
             task_name = f"define-{self.name}-{i}-{name}"
@@ -95,11 +96,16 @@ class Define(ProcessingStep):
             ast_wrapper = expression_to_ast(expression)
             tasks = ast_wrapper.to_tasks(data)
             if previous_definition:
-                tasks.append_to_task(tasks.first_task, previous_definition)
+                # check each task to see if it depends on the previous definition
+                # if it does, add the previous definition as dependency
+                dependend_tasks = tasks.find_tasks_with_dependency(previous_variable)
+                for dependent in dependend_tasks:
+                    tasks.append_to_task(dependent, previous_definition)
             self._tasks.update(tasks)
             partial_add = partial(data.add_variable, name)
             self._tasks.add_task(task_name, partial_add, tasks.last_task)
             previous_definition = task_name
+            previous_variable = name
 
 
         return self._tasks
