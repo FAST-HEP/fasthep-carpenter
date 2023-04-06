@@ -114,6 +114,30 @@ class TaskCollection:
         """
         return self._tasks
 
+    def _find_tasks_with_dependency(self, dependency):
+        """Find all tasks that depend on a given dependency.
+
+        Args:
+            dependency (str): The dependency to search for.
+
+        Returns:
+            list[str]: The tasks that depend on the dependency.
+        """
+        for task_name, task in self._tasks.items():
+            for argument in task:
+                if dependency == argument:
+                    yield task_name
+                    break
+                try:
+                    if dependency in argument:
+                        yield task_name
+                        break
+                except TypeError:
+                    pass
+
+    def find_tasks_with_dependency(self, dependency):
+        return list(self._find_tasks_with_dependency(dependency))
+
 
 class Workflow:
     layers: dict[str, TaskGraph]
