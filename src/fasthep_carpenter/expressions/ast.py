@@ -3,7 +3,6 @@ import numpy as np
 from typing import Any
 from collections import defaultdict
 from functools import partial
-from astor import to_source
 
 from ..protocols import DataMapping
 from ..workflow import Task, get_task_number
@@ -88,20 +87,7 @@ def get_symbol(data: DataMapping, symbol: SymbolNode):
         return data[symbol.value]
 
 
-class NodeToStringConverter(ast.NodeVisitor):
-    def __init__(self):
-        self.result = ''
-
-    def visit_Add(self, node):
-        self.result = '+'
-
-    def convert(self, node):
-        self.visit(node)
-        return self.result
-
-
 def ast_to_expression(node: ast.AST) -> str:
-    converter = NodeToStringConverter()
     if isinstance(node, SymbolNode):
         if node.slice is not None:
             return f"{node.value}{node.slice}"
@@ -111,6 +97,8 @@ def ast_to_expression(node: ast.AST) -> str:
         return f"{ast_to_expression(node.left)} {symbol_to_str(node.op)} {ast_to_expression(node.right)}"
     elif isinstance(node, ast.UnaryOp):
         return f"{symbol_to_str(node.op)}{ast_to_expression(node.operand)}"
+    else:
+        return node.value
 
 
 class ASTWrapper:
