@@ -48,6 +48,41 @@ def reset_task_counters():
     _task_counters = defaultdict(int)
 
 
+class TaskCollection:
+    _tasks: TaskGraph
+    first_task: str
+    last_task: str
+
+    def __init__(self):
+        self._tasks = {}
+        self.first_task = None
+        self.last_task = None
+
+    def add_task(self, task_name: str, *args: Any):
+        """Add a task to the collection.
+
+        Args:
+            task_name (str): The name of the task.
+            task (Task): The task to add.
+        """
+        self._tasks[task_name] = (*args,)
+        if self.first_task is None:
+            self.first_task = task_name
+        self.last_task = task_name
+
+    def __repr__(self) -> str:
+        return f"TaskCollection({self._tasks}, first={self.first_task}, last={self.last_task})"
+
+    @property
+    def graph(self) -> TaskGraph:
+        """Get the tasks in the collection.
+
+        Returns:
+            TaskGraph: The tasks in the collection.
+        """
+        return self._tasks
+
+
 class Workflow:
     layers: dict[str, TaskGraph]
     dependencies: dict[str, set[str]]
