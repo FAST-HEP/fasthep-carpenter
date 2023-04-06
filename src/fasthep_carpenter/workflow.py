@@ -73,6 +73,38 @@ class TaskCollection:
     def __repr__(self) -> str:
         return f"TaskCollection({self._tasks}, first={self.first_task}, last={self.last_task})"
 
+    def __len__(self) -> int:
+        return len(self._tasks)
+
+    def __iter__(self):
+        return iter(self._tasks)
+
+    def __contains__(self, task_name: str) -> bool:
+        return task_name in self._tasks
+
+    def __getitem__(self, task_name: str) -> Task:
+        return self._tasks[task_name]
+
+    def update(self, other: Any):
+        """Update the collection with another collection.
+
+        Args:
+            other (TaskCollection): The other collection.
+        """
+        self._tasks.update(other._tasks)
+        if self.first_task is None:
+            self.first_task = other.first_task
+        self.last_task = other.last_task
+
+    def append_to_task(self, task_name: str, *args: Any):
+        """Append to the arguments of a task.
+
+        Args:
+            task_name (str): The name of the task.
+            *args (Any): The arguments to append.
+        """
+        self._tasks[task_name] = (*self._tasks[task_name], *args)
+
     @property
     def graph(self) -> TaskGraph:
         """Get the tasks in the collection.
