@@ -32,7 +32,7 @@ def dummy_mapping():
     )
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture(scope="session", autouse=True)
 def register_functions():
     register_function("count", lambda x: len(x))
 
@@ -85,7 +85,7 @@ def test_compare_expression(dummy_mapping):
     assert ak.all(result == (dummy_mapping["a"] > 1))
 
 
-def test_expression_with_func(dummy_mapping, register_functions):
+def test_expression_with_func(dummy_mapping):
     expression = "count(a + b)"
     ast_wrapper = expression_to_ast(expression)
     assert isinstance(ast_wrapper, ASTWrapper)
@@ -110,7 +110,7 @@ def test_expression_with_func(dummy_mapping, register_functions):
     assert result == 2
 
 
-def test_expression_with_func_and_slice(dummy_mapping, register_functions, clear_task_counters):
+def test_expression_with_func_and_slice(dummy_mapping):
     expression = "count(c[1:])"
     ast_wrapper = expression_to_ast(expression)
     assert isinstance(ast_wrapper, ASTWrapper)
@@ -127,5 +127,19 @@ def test_expression_with_func_and_slice(dummy_mapping, register_functions, clear
     assert "func-slice-0" in tasks  # slice c
     assert "func-count-0" in tasks  # count slice
 
+    result = execute_tasks(tasks)
+    assert result == 1
+
+
+@pytest.mark.xfail
+def test_expression_with_complex_slice(dummy_mapping):
+    expression = "c[:, 0]"
+    ast_wrapper = expression_to_ast(expression)
+    ast_tree = ast_wrapper.ast
+    # first node is the function node
+    assert isinstance(ast_tree, FunctionNode)
+    assert ast_tree.name == "slice"
+
+    tasks = ast_wrapper.to_tasks(dummy_mapping)
     result = execute_tasks(tasks)
     assert result == 1
