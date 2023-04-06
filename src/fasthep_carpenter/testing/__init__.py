@@ -2,6 +2,7 @@ from collections import namedtuple
 import numpy as np
 from typing import Any
 
+from ..workflow import Task
 
 FakeEventRange = namedtuple("FakeEventRange", "start_entry stop_entry entries_in_block")
 
@@ -46,3 +47,12 @@ class FakeTree(dict):
 
 class DummyMapping(dict):
     pass
+
+
+def execute_task(task):
+    return task[0](*task[1:])
+
+
+def execute_tasks(tasks: dict[Task], last_task: str) -> Any:
+    from dask.threaded import get
+    return get(tasks, last_task)
