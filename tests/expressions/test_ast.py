@@ -1,8 +1,6 @@
 import ast
-from copy import deepcopy
 import awkward as ak
 import pytest
-from functools import partial
 
 from fasthep_carpenter.expressions import (
     register_function,
@@ -13,8 +11,13 @@ from fasthep_carpenter.expressions import (
     FunctionNode,
 )
 
-from fasthep_carpenter.protocols import DataMapping
-from fasthep_carpenter.testing import DummyMapping
+from fasthep_carpenter.testing import DummyMapping, execute_task, execute_tasks
+from fasthep_carpenter.workflow import reset_task_counters
+
+
+@pytest.fixture(autouse=True)
+def clear_task_counters():
+    reset_task_counters()
 
 
 @pytest.fixture
@@ -32,10 +35,6 @@ def dummy_mapping():
 @pytest.fixture(scope="session")
 def register_functions():
     register_function("count", lambda x: len(x))
-
-
-def execute_task(task):
-    return task[0](*task[1:])
 
 
 def test_constant(dummy_mapping):
@@ -65,6 +64,17 @@ def test_expression(dummy_mapping):
     assert isinstance(ast_tree.right, SymbolNode)
 
 
+def test_expression_with_constants(dummy_mapping):
+    expression = "a*2 + 1"
+    ast_wrapper = expression_to_ast(expression)
+    tasks = ast_wrapper.to_tasks(dummy_mapping)
+    # the above is a "pure" expression, so it should only have one task
+    assert len(tasks) == 1
+    assert "eval-0" in tasks
+    result = execute_tasks(tasks, "eval-0")
+    assert ak.all(result == (dummy_mapping["a"] * 2 + 1))
+
+
 def test_expression_with_func(dummy_mapping, register_functions):
     expression = "count(a + b)"
     ast_wrapper = expression_to_ast(expression)
@@ -86,12 +96,11 @@ def test_expression_with_func(dummy_mapping, register_functions):
     assert tasks["eval-0"][0].func == SUPPORTED_FUNCTIONS["eval"]
     assert tasks["eval-0"][0].keywords["global_dict"] == dummy_mapping
 
-    from dask.threaded import get
-    result = get(tasks, "func-count-0")
+    result = execute_tasks(tasks, "func-count-0")
     assert result == 2
 
 
-def test_expression_with_func_and_slice(dummy_mapping, register_functions):
+def test_expression_with_func_and_slice(dummy_mapping, register_functions, clear_task_counters):
     expression = "count(c[1:])"
     ast_wrapper = expression_to_ast(expression)
     assert isinstance(ast_wrapper, ASTWrapper)
@@ -103,10 +112,10 @@ def test_expression_with_func_and_slice(dummy_mapping, register_functions):
 
     tasks = ast_wrapper.to_tasks(dummy_mapping)
     assert len(tasks) == 4
-    assert "eval-0" in tasks # evaluate c
-    assert "constant-0" in tasks # slice start
-    assert "func-slice-0" in tasks # slice c
-    assert "func-count-0" in tasks # count slice
+    assert "eval-0" in tasks  # evaluate c
+    assert "constant-0" in tasks  # slice start
+    assert "func-slice-0" in tasks  # slice c
+    assert "func-count-0" in tasks  # count slice
 
     from dask.threaded import get
     result = get(tasks, "func-count-0")
