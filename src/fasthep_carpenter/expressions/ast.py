@@ -5,7 +5,7 @@ from collections import defaultdict
 from functools import partial
 
 from ..protocols import DataMapping
-from ..workflow import Task, get_task_number
+from ..workflow import Task, get_task_number, TaskCollection
 from .custom import SUPPORTED_FUNCTIONS
 from .symbols import symbol_to_str
 
@@ -97,19 +97,19 @@ def ast_to_expression(node: ast.AST) -> str:
         return f"{ast_to_expression(node.left)} {symbol_to_str(node.op)} {ast_to_expression(node.right)}"
     elif isinstance(node, ast.UnaryOp):
         return f"{symbol_to_str(node.op)}{ast_to_expression(node.operand)}"
+    elif isinstance(node, ast.Compare):
+        return f"{ast_to_expression(node.left)} {symbol_to_str(node.ops[0])} {ast_to_expression(node.comparators[0])}"
     else:
         return node.value
 
 
 class ASTWrapper:
 
-    tasks: dict[str, Task]
-    last_task: str
+    tasks: TaskCollection
 
     def __init__(self, abstrac_syntax_tree) -> None:
         self.ast = abstrac_syntax_tree
-        self.tasks = {}
-        self.last_task = None
+        self.tasks = None
 
     def __repr__(self) -> str:
         return f"ASTWrapper({self.ast})"
@@ -131,13 +131,13 @@ class ASTWrapper:
         is_pure = all(self._is_pure(node))
         if isinstance(node, ast.Constant):
             task_name = self._get_task_name("constant")
-            self.tasks[task_name] = (SUPPORTED_FUNCTIONS["constant"], node.value)
+            self.tasks.add_task(task_name, SUPPORTED_FUNCTIONS["constant"], node.value)
             return task_name
 
         if is_pure:
             task_name = self._get_task_name("eval")
             partial_eval = partial(SUPPORTED_FUNCTIONS["eval"], global_dict=data)
-            self.tasks[task_name] = (partial_eval, ast_to_expression(node))
+            self.tasks.add_task(task_name, partial_eval, ast_to_expression(node))
             return task_name
 
         if isinstance(node, FunctionNode):
@@ -155,15 +155,14 @@ class ASTWrapper:
                         slice_args.append(None)
                         continue
                     slice_args.append(self._build(item, data))
-
-                self.tasks[task_name] = (SUPPORTED_FUNCTIONS[var_name], previous_tasks[0], slice_args)
+                self.tasks.add_task(task_name, SUPPORTED_FUNCTIONS[var_name], previous_tasks[0], slice_args)
             else:
-                self.tasks[task_name] = (SUPPORTED_FUNCTIONS[var_name], *previous_tasks)
+                self.tasks.add_task(task_name, SUPPORTED_FUNCTIONS[var_name], *previous_tasks)
             return task_name
 
     def build(self, data: DataMapping) -> None:
-        self.tasks = {}
-        self.last_task = self._build(self.ast, data)
+        self.tasks = TaskCollection()
+        self._build(self.ast, data)
 
     def to_tasks(self, data: DataMapping) -> dict[str, Task]:
         if not self.tasks:

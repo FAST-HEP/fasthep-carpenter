@@ -71,8 +71,18 @@ def test_expression_with_constants(dummy_mapping):
     # the above is a "pure" expression, so it should only have one task
     assert len(tasks) == 1
     assert "eval-0" in tasks
-    result = execute_tasks(tasks, "eval-0")
+    result = execute_tasks(tasks)
     assert ak.all(result == (dummy_mapping["a"] * 2 + 1))
+
+
+def test_compare_expression(dummy_mapping):
+    expression = "a > 1"
+    ast_wrapper = expression_to_ast(expression)
+    tasks = ast_wrapper.to_tasks(dummy_mapping)
+    assert len(tasks) == 1
+    assert "eval-0" in tasks
+    result = execute_tasks(tasks)
+    assert ak.all(result == (dummy_mapping["a"] > 1))
 
 
 def test_expression_with_func(dummy_mapping, register_functions):
@@ -96,7 +106,7 @@ def test_expression_with_func(dummy_mapping, register_functions):
     assert tasks["eval-0"][0].func == SUPPORTED_FUNCTIONS["eval"]
     assert tasks["eval-0"][0].keywords["global_dict"] == dummy_mapping
 
-    result = execute_tasks(tasks, "func-count-0")
+    result = execute_tasks(tasks)
     assert result == 2
 
 
@@ -117,6 +127,5 @@ def test_expression_with_func_and_slice(dummy_mapping, register_functions, clear
     assert "func-slice-0" in tasks  # slice c
     assert "func-count-0" in tasks  # count slice
 
-    from dask.threaded import get
-    result = get(tasks, "func-count-0")
+    result = execute_tasks(tasks)
     assert result == 1
