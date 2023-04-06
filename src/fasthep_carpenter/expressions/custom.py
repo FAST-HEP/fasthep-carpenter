@@ -19,6 +19,7 @@ def _constant(x):
 SUPPORTED_FUNCTIONS = {
     "add": ak.Array.__add__,
     "eval": ak._connect.numexpr.evaluate,
+    "sqrt": np.sqrt,
     "slice": _slice,
     "constant": _constant,
 }
