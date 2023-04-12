@@ -433,7 +433,7 @@ class ProcessingStep(Protocol):
     """
     name: str
 
-    def __call__(self, data: Dict[str, Any]) -> ProcessingStepResult:
+    def __call__(self, data: DataMapping) -> ProcessingStepResult:
         ...
 
 
@@ -495,7 +495,3 @@ class Collector():
         if not reducible:
             raise RuntimeError("Cannot reduce results of different types")
         return reduce(self.reducer, results)
-
-
-# very general task definition
-Task = tuple[Callable[[Any], Any], Any]
