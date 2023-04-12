@@ -2,7 +2,7 @@ from collections import namedtuple
 import numpy as np
 from typing import Any
 
-from ..workflow import Task
+from ..workflow import Task, TaskCollection
 
 FakeEventRange = namedtuple("FakeEventRange", "start_entry stop_entry entries_in_block")
 
@@ -49,10 +49,13 @@ class DummyMapping(dict):
     pass
 
 
-def execute_task(task):
+def execute_task(task: Task):
     return task[0](*task[1:])
 
 
-def execute_tasks(tasks: dict[Task], last_task: str) -> Any:
+def execute_tasks(tasks: TaskCollection) -> Any:
     from dask.threaded import get
-    return get(tasks, last_task)
+    try:
+        return get(tasks.graph, tasks.last_task)
+    except KeyError as e:
+        raise KeyError(f"A task failed to execute: {e}")
