@@ -5,8 +5,6 @@ from pathlib import Path
 import rich
 import typer
 
-from .utils import mkdir_p
-
 app = typer.Typer()
 
 
@@ -26,36 +24,49 @@ def run(dataset_cfg: Path, sequence_cfg: Path, output_dir: str, processing_backe
 
         from . import backends, bookkeeping, data_import
         from .settings import CarpenterSettings
+        from .utils import mkdir_p
+        from .workflow import Workflow
     except ImportError as e:
         rich.print("[red]Failed to import required package:[/red]", e)
         sys.exit(1)
+
+    # prepare output directory
+    mkdir_p(output_dir)
+
+    # read datasets and processing sequence
+    datasets = fast_curator.read.from_yaml(dataset_cfg)
     sequence, sequence_cfg = fast_flow.v1.read_sequence_yaml(
         sequence_cfg,
         output_dir=output_dir,
         backend="fasthep_carpenter",
         return_cfg=True,
     )
-    datasets = fast_curator.read.from_yaml(dataset_cfg)
-    backend = backends.get_backend(processing_backend)
-
-    mkdir_p(output_dir)
-
+    # store bookkeeping information if requested
     if store_bookkeeping:
         book_keeping_file = os.path.join(output_dir, "book-keeping.tar.gz")
         bookkeeping.write_booking(
             book_keeping_file, sequence_cfg, datasets, cmd_line_args=sys.argv[1:]
         )
-        # fast_carpenter.store_bookkeeping(datasets, output_dir)
+
+    # load settings
     settings = CarpenterSettings(
         ncores=1,
         outdir=output_dir,
+        plugins={
+            "data_import": data_import.get_data_import_plugin("uproot4", None)
+        },
     )
-    results, _ = backend.execute(
-        sequence,
-        datasets,
-        args=settings,
-        plugins={"data_import": data_import.get_data_import_plugin("uproot4", None)},
-    )
+    # extract workflow
+    workflow = Workflow(sequence, datasets)
+    # get backend
+    backend = backends.get_backend(processing_backend)
+    # execute workflow
+    results = backend.execute(workflow, settings)
+
+    # generate report and summary
+    # TODO
+
+    # print summary of results (details in processing_report.html)
     rich.print(f"[blue]Results[/]: {results}")
     rich.print(f"[blue]Output written to directory {output_dir}[/]")
 
