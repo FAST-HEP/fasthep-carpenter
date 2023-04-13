@@ -4,6 +4,9 @@ from dask import visualize
 from dask.delayed import Delayed
 from typing import Any, Callable
 
+from .settings import Settings
+from .protocols import DataImportPlugin, InputData
+
 # very general task definition
 Task = tuple[Callable[[Any], Any], Any]
 
@@ -139,9 +142,13 @@ class TaskCollection:
         return list(self._find_tasks_with_dependency(dependency))
 
 
+def __do_nothing__(*args, **kwargs):
+    return args, kwargs
+
 class Workflow:
     layers: dict[str, TaskGraph]
     dependencies: dict[str, set[str]]
+    last_task: Any
     """Creates layers of tasks to be executed in a workflow.
     e.g. read-csv -> add -> filter -> ...
     {
@@ -164,6 +171,59 @@ class Workflow:
 
     """
 
-    def __init__(self, sequence: list[str], datasets: dict[str, Any]):
+    def __init__(self, sequence: list[str], datasets: dict[str, Any], settings: Settings):
         self.layers = {}
         self.dependencies = {}
+        # create data read tasks
+        read_tasks = TaskCollection()
+        for dataset in datasets:
+            name_tmp = f"read-data-{dataset.name}"
+            for input_file in dataset.files:
+                task_id = get_task_number(name_tmp)
+                task_name = f"{name_tmp}-{task_id}"
+                read_tasks.add_task(task_name, print, input_file)
+
+        self.layers["read-data"] = read_tasks.graph
+        self.dependencies["read-data"] = set()
+
+        self.layers["__finalize__"] = {
+            ("__finalize__", 0): (__do_nothing__, *read_tasks.graph.keys())
+        }
+        self.dependencies["__finalize__"] = {"read-data"}
+        self.last_task = ("__finalize__", 0)
+
+
+    def add_data_stage(
+        self, data_import_plugin: DataImportPlugin, input_data: InputData
+    ) -> None:
+        """Adds data stage to the workflow. One node is generated for each file in each dataset"""
+        pass
+
+
+
+    def visualize(self, output_file: str, high_level: bool = False, **kwargs) -> None:
+        from dask.delayed import Delayed
+
+        if high_level:
+            self.graph.visualize(filename=output_file, **kwargs)
+            return
+
+        dsk_delayed = Delayed("w", self.graph.to_dict())
+        dsk_delayed.visualize(filename=output_file, verbose=True, engine="graphviz", **kwargs)
+
+        # self.graph.visualize(filename=output_file, **kwargs)
+
+
+    @property
+    def graph(self) -> Any:
+        try:
+            from dask.highlevelgraph import HighLevelGraph
+        except ImportError:
+            raise ImportError(
+                "Dask is not installed. Please install dask to use the visualize method."
+            )
+        graph = HighLevelGraph(self.layers, self.dependencies)
+        return graph
+
+    def __repr__(self) -> str:
+        return str(self.graph)
