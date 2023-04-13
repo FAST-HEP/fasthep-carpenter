@@ -28,11 +28,11 @@ class Define(ProcessingStep):
     _variables: list[tuple[str]]
     _tasks: TaskCollection
 
-    def __init__(self, name: str, variable_definitions: list[VariableDefinition], **kwargs) -> None:
+    def __init__(self, name: str, variables: list[VariableDefinition], **kwargs) -> None:
         self._name = name
-        self._variable_definitions = variable_definitions
+        self._variable_definitions = variables
         self._variables = []
-        for variable in variable_definitions:
+        for variable in variables:
             for name, expression in variable.items():
                 self._variables.append((name, expression))
         self._tasks = None
@@ -62,6 +62,7 @@ class Define(ProcessingStep):
     def name(self) -> str:
         return self._name
 
+    # TODO: tasks should be able to created without using a data mapping
     def tasks(self, data: DataMapping) -> TaskCollection:
         """
         Uses the variable definitions to create a task graph.
