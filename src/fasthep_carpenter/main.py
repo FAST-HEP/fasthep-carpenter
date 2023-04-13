@@ -23,7 +23,7 @@ def run(dataset_cfg: Path, sequence_cfg: Path, output_dir: str, processing_backe
         import fast_flow.v1
 
         from . import backends, bookkeeping, data_import
-        from .settings import CarpenterSettings
+        from .settings import Settings
         from .utils import mkdir_p
         from .workflow import Workflow
     except ImportError as e:
@@ -49,7 +49,7 @@ def run(dataset_cfg: Path, sequence_cfg: Path, output_dir: str, processing_backe
         )
 
     # load settings
-    settings = CarpenterSettings(
+    settings = Settings(
         ncores=1,
         outdir=output_dir,
         plugins={
@@ -57,7 +57,7 @@ def run(dataset_cfg: Path, sequence_cfg: Path, output_dir: str, processing_backe
         },
     )
     # extract workflow
-    workflow = Workflow(sequence, datasets)
+    workflow = Workflow(sequence, datasets, settings)
     # get backend
     backend = backends.get_backend(processing_backend)
     # execute workflow
