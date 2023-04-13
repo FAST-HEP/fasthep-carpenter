@@ -6,7 +6,7 @@ from typing import Any
 
 
 @dataclass
-class CarpenterSettings:
+class Settings:
     """Settings for fasthep-carpenter"""
 
     ncores: int = 1
