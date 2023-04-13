@@ -30,6 +30,11 @@ def get_dask(processing_mode):
     backend.configure(processing_mode=processing_mode)
     return backend
 
+def get_local():
+    from ._local import LocalBackend
+
+    backend = LocalBackend()
+    return backend
 
 KNOWN_BACKENDS = {
     "multiprocessing": partial(get_dask, processing_mode="local"),
@@ -45,6 +50,7 @@ KNOWN_BACKENDS = {
     "parsl:local": partial(get_parsl, "local"),
     "parsl:htcondor": partial(get_parsl, "local"),
     "parsl:dirac": partial(get_parsl, "local"),
+    "local": get_local, # for testing only
 }
 
 KNOW_BACKENDS_NAMES = ", ".join(list(KNOWN_BACKENDS.keys()))
