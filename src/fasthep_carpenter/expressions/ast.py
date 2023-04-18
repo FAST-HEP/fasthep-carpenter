@@ -5,7 +5,7 @@ from collections import defaultdict
 from functools import partial
 
 from ..protocols import DataMapping
-from ..workflow import Task, get_task_number, TaskCollection
+from ..workflow import Task, get_task_number, TaskCollection, TaskGraph
 from .custom import SUPPORTED_FUNCTIONS
 from .symbols import symbol_to_str
 
@@ -105,7 +105,9 @@ def ast_to_expression(node: ast.AST) -> str:
 
 class ASTWrapper:
 
+    ast: Any
     tasks: TaskCollection
+    data_source: str = "__joint__"
 
     def __init__(self, abstrac_syntax_tree) -> None:
         self.ast = abstrac_syntax_tree
@@ -125,8 +127,8 @@ class ASTWrapper:
                 continue
             yield not isinstance(node, (FunctionNode, ))
 
-    def _build(self, node: Any, data: DataMapping) -> str:
-
+    def __build(self, node: Any):
+        from dask.utils import apply
         # if node only contains symbols or binary operators, create eval task
         is_pure = all(self._is_pure(node))
         if isinstance(node, ast.Constant):
@@ -136,15 +138,18 @@ class ASTWrapper:
 
         if is_pure:
             task_name = self._get_task_name("eval")
-            partial_eval = partial(SUPPORTED_FUNCTIONS["eval"], global_dict=data)
-            self.tasks.add_task(task_name, partial_eval, ast_to_expression(node))
+            # partial_eval = partial(SUPPORTED_FUNCTIONS["eval"], global_dict=data)
+            self.tasks.add_task(
+                task_name, SUPPORTED_FUNCTIONS["eval"],
+                ast_to_expression(node),
+                global_dict=f"{self.data_source}")
             return task_name
 
         if isinstance(node, FunctionNode):
             var_name = node.name
             previous_tasks = []
             for arg in node.arguments:
-                previous_tasks.append(self._build(arg, data))
+                previous_tasks.append(self.__build(arg))
             task_name = self._get_task_name(f"func-{var_name}")
 
             slice_args = []
@@ -154,20 +159,32 @@ class ASTWrapper:
                     if item is None:
                         slice_args.append(None)
                         continue
-                    slice_args.append(self._build(item, data))
+                    slice_args.append(self.__build(item))
                 self.tasks.add_task(task_name, SUPPORTED_FUNCTIONS[var_name], previous_tasks[0], slice_args)
             else:
                 self.tasks.add_task(task_name, SUPPORTED_FUNCTIONS[var_name], *previous_tasks)
             return task_name
 
-    def build(self, data: DataMapping) -> None:
+    def build(self, join_task: str = "__joint__") -> None:
+        self.data_source = join_task
         self.tasks = TaskCollection()
-        self._build(self.ast, data)
+        self.__build(self.ast)
 
-    def to_tasks(self, data: DataMapping) -> dict[str, Task]:
+    def to_tasks(self, join_task: str = "__joint__") -> dict[str, Task]:
         if not self.tasks:
-            self.build(data)
+            self.build(join_task)
         return self.tasks
+
+    @property
+    def graph(self) -> TaskGraph:
+        if not self.tasks:
+            self.tasks = TaskCollection()
+            self.__build(self.ast)
+        return self.tasks.graph
+
+    def get_graph(self, join_task: str = "__joint__") -> TaskGraph:
+        self.data_source = join_task
+        return self.graph
 
 
 def expression_to_ast(expression):

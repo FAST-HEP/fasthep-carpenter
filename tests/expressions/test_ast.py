@@ -37,22 +37,25 @@ def register_functions():
     register_function("count", lambda x: len(x))
 
 
-def test_constant(dummy_mapping):
+def test_constant():
     expression = "1"
     ast_wrapper = expression_to_ast(expression)
     assert isinstance(ast_wrapper, ASTWrapper)
     ast_tree = ast_wrapper.ast
     assert isinstance(ast_tree, ast.Constant)
     assert ast_tree.value == 1
-    tasks = ast_wrapper.to_tasks(dummy_mapping)
-    assert len(tasks) == 1
-    assert "constant-0" in tasks
-    assert tasks["constant-0"][0] == SUPPORTED_FUNCTIONS["constant"]
-    assert tasks["constant-0"][1] == 1
-    assert execute_task(tasks["constant-0"]) == 1
 
+    graph = ast_wrapper.graph
+    assert len(graph) == 1
+    assert "constant-0" in graph
+    assert graph["constant-0"][0] == SUPPORTED_FUNCTIONS["constant"]
+    assert graph["constant-0"][1] == 1
+    assert execute_task(graph["constant-0"]) == 1
 
-def test_expression(dummy_mapping):
+# as workaround for current issue in Dask->tornado->asyncio
+# all tests that use Dask (or execute_tasks) need to be marked as async
+@pytest.mark.asyncio
+async def test_expression(dummy_mapping):
     expression = "a + b"
     ast_wrapper = expression_to_ast(expression)
     assert isinstance(ast_wrapper, ASTWrapper)
@@ -63,29 +66,37 @@ def test_expression(dummy_mapping):
     assert isinstance(ast_tree.left, SymbolNode)
     assert isinstance(ast_tree.right, SymbolNode)
 
+    tasks = ast_wrapper.to_tasks(join_task="test_data")
+    tasks.prepend_task("test_data", lambda: dummy_mapping)
+    assert ak.all(execute_tasks(ast_wrapper.tasks) == dummy_mapping["a"] + dummy_mapping["b"])
 
-def test_expression_with_constants(dummy_mapping):
-    expression = "a*2 + 1"
+@pytest.mark.asyncio
+async def test_expression_with_constants(dummy_mapping):
+    expression = "a * 2 + 1"
     ast_wrapper = expression_to_ast(expression)
-    tasks = ast_wrapper.to_tasks(dummy_mapping)
+    tasks = ast_wrapper.to_tasks(join_task="test_data")
     # the above is a "pure" expression, so it should only have one task
     assert len(tasks) == 1
     assert "eval-0" in tasks
+    tasks.prepend_task("test_data", lambda: dummy_mapping)
     result = execute_tasks(tasks)
     assert ak.all(result == (dummy_mapping["a"] * 2 + 1))
 
 
-def test_compare_expression(dummy_mapping):
+@pytest.mark.asyncio
+async def test_compare_expression(dummy_mapping):
     expression = "a > 1"
     ast_wrapper = expression_to_ast(expression)
-    tasks = ast_wrapper.to_tasks(dummy_mapping)
+    tasks = ast_wrapper.to_tasks(join_task="test_data")
     assert len(tasks) == 1
     assert "eval-0" in tasks
+    tasks.prepend_task("test_data", lambda: dummy_mapping)
     result = execute_tasks(tasks)
     assert ak.all(result == (dummy_mapping["a"] > 1))
 
 
-def test_expression_with_func(dummy_mapping):
+@pytest.mark.asyncio
+async def test_expression_with_func(dummy_mapping):
     expression = "count(a + b)"
     ast_wrapper = expression_to_ast(expression)
     assert isinstance(ast_wrapper, ASTWrapper)
@@ -99,18 +110,18 @@ def test_expression_with_func(dummy_mapping):
     assert isinstance(arguments.left, SymbolNode)
     assert isinstance(arguments.right, SymbolNode)
 
-    tasks = ast_wrapper.to_tasks(dummy_mapping)
+    tasks = ast_wrapper.to_tasks(join_task="test_data")
     assert len(tasks) == 2
     assert "eval-0" in tasks
     assert "func-count-0" in tasks
-    assert tasks["eval-0"][0].func == SUPPORTED_FUNCTIONS["eval"]
-    assert tasks["eval-0"][0].keywords["global_dict"] == dummy_mapping
 
+    tasks.prepend_task("test_data", lambda: dummy_mapping)
     result = execute_tasks(tasks)
     assert result == 2
 
 
-def test_expression_with_func_and_slice(dummy_mapping):
+@pytest.mark.asyncio
+async def test_expression_with_func_and_slice(dummy_mapping):
     expression = "count(c[1:])"
     ast_wrapper = expression_to_ast(expression)
     assert isinstance(ast_wrapper, ASTWrapper)
@@ -120,19 +131,22 @@ def test_expression_with_func_and_slice(dummy_mapping):
     assert ast_tree.name == "count"
     assert isinstance(ast_tree.arguments[0], FunctionNode)
 
-    tasks = ast_wrapper.to_tasks(dummy_mapping)
+    tasks = ast_wrapper.to_tasks(join_task="test_data")
     assert len(tasks) == 4
     assert "eval-0" in tasks  # evaluate c
     assert "constant-0" in tasks  # slice start
     assert "func-slice-0" in tasks  # slice c
     assert "func-count-0" in tasks  # count slice
 
+    tasks.prepend_task("test_data", lambda: dummy_mapping)
+
     result = execute_tasks(tasks)
     assert result == 1
 
 
 @pytest.mark.xfail
-def test_expression_with_complex_slice(dummy_mapping):
+@pytest.mark.asyncio
+async def test_expression_with_complex_slice(dummy_mapping):
     expression = "c[:, 0]"
     ast_wrapper = expression_to_ast(expression)
     ast_tree = ast_wrapper.ast
@@ -140,6 +154,7 @@ def test_expression_with_complex_slice(dummy_mapping):
     assert isinstance(ast_tree, FunctionNode)
     assert ast_tree.name == "slice"
 
-    tasks = ast_wrapper.to_tasks(dummy_mapping)
+    tasks = ast_wrapper.to_tasks(join_task="test_data")
+    tasks.prepend_task("test_data", lambda: dummy_mapping)
     result = execute_tasks(tasks)
     assert result == 1
