@@ -50,12 +50,29 @@ class DummyMapping(dict):
 
 
 def execute_task(task: Task):
+    """Execute a task by calling it with its arguments."""
     return task[0](*task[1:])
+
+# Although closed, this issue is still relevant:
+# https://github.com/dask/dask/issues/3741
+# it prevents us from using the threaded scheduler for testing
+# as it does not support keyword arguments.
+#
+# def execute_tasks(tasks: TaskCollection) -> Any:
+#     from dask.threaded import get
+#     try:
+#         return get(tasks.graph, tasks.last_task)
+#     except KeyError as e:
+#         raise KeyError(f"A task failed to execute: {e}")
 
 
 def execute_tasks(tasks: TaskCollection) -> Any:
-    from dask.threaded import get
+    """Execute a task collection using the distributed scheduler."""
+    from dask.distributed import Client
+    client = Client()
     try:
-        return get(tasks.graph, tasks.last_task)
+        result = client.get(tasks.graph, tasks.last_task)
+        client.close()
+        return result
     except KeyError as e:
         raise KeyError(f"A task failed to execute: {e}")
