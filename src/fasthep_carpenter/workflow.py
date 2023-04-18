@@ -2,10 +2,11 @@ from collections import defaultdict
 
 from dask import visualize
 from dask.delayed import Delayed
+from dask.utils import apply
 from typing import Any, Callable
 
 from .settings import Settings
-from .protocols import DataImportPlugin, InputData
+from .protocols import DataImportPlugin, InputData, ProcessingStep
 
 # very general task definition
 Task = tuple[Callable[[Any], Any], Any]
@@ -61,17 +62,26 @@ class TaskCollection:
         self.first_task = None
         self.last_task = None
 
-    def add_task(self, task_name: str, *args: Any):
+    def add_task(self, task_name: str, *args: Any, **kwargs: Any):
         """Add a task to the collection.
 
         Args:
             task_name (str): The name of the task.
             task (Task): The task to add.
         """
-        self._tasks[task_name] = (*args,)
+        if not kwargs:
+            self._tasks[task_name] = (*args,)
+        else:
+            self._tasks[task_name] = (apply, args[0], args[1:], kwargs)
         if self.first_task is None:
             self.first_task = task_name
         self.last_task = task_name
+
+    def prepend_task(self, task_name: str, *args: Any, **kwargs: Any):
+        current_last_task = self.last_task
+        self.add_task(task_name, *args, **kwargs)
+        self.first_task = task_name
+        self.last_task = current_last_task
 
     def __repr__(self) -> str:
         return f"TaskCollection({self._tasks}, first={self.first_task}, last={self.last_task})"
@@ -145,6 +155,7 @@ class TaskCollection:
 def __do_nothing__(*args, **kwargs):
     return args, kwargs
 
+
 class Workflow:
     layers: dict[str, TaskGraph]
     dependencies: dict[str, set[str]]
@@ -171,35 +182,53 @@ class Workflow:
 
     """
 
-    def __init__(self, sequence: list[str], datasets: dict[str, Any], settings: Settings):
+    def __init__(self, sequence: list[ProcessingStep], datasets: dict[str, Any], settings: Settings) -> None:
         self.layers = {}
         self.dependencies = {}
-        # create data read tasks
-        read_tasks = TaskCollection()
-        for dataset in datasets:
-            name_tmp = f"read-data-{dataset.name}"
-            for input_file in dataset.files:
-                task_id = get_task_number(name_tmp)
-                task_name = f"{name_tmp}-{task_id}"
-                read_tasks.add_task(task_name, print, input_file)
 
-        self.layers["read-data"] = read_tasks.graph
-        self.dependencies["read-data"] = set()
+        # create tasks for each stage in the sequence
+        previous_stage = None
+        for stage in sequence:
+            current_stage = stage.name
+            stage.set_extra(datasets=datasets, settings=settings)
+
+            self.dependencies[current_stage] = {previous_stage} if previous_stage else set()
+            if hasattr(stage, "graph") or isinstance(getattr(type(stage), "graph", None), property):
+                print("custom graph", "--" * 10)
+                graph = stage.graph
+                self.layers[current_stage] = graph
+                previous_stage = current_stage
+                continue
+
+            # no custom graph, create tasks
+            tasks = TaskCollection()
+            # multiplex the previous stage tasks to the current stage
+            if previous_stage is None:
+                task_id = get_task_number(current_stage)
+                task_name = f"{current_stage}-{task_id}"
+                tasks.add_task(task_name, stage)
+                self.layers[current_stage] = tasks.graph
+                previous_stage = current_stage
+                continue
+
+            for previous in self.layers[previous_stage]:
+                task_id = get_task_number(current_stage)
+                task_name = f"{current_stage}-{task_id}"
+                tasks.add_task(task_name, stage, previous)
+            self.layers[current_stage] = tasks.graph
+            previous_stage = current_stage
 
         self.layers["__finalize__"] = {
-            ("__finalize__", 0): (__do_nothing__, *read_tasks.graph.keys())
+            ("__finalize__", 0): (__do_nothing__, *self.layers[previous_stage].keys())
         }
-        self.dependencies["__finalize__"] = {"read-data"}
+        self.dependencies["__finalize__"] = {previous_stage}
         self.last_task = ("__finalize__", 0)
-
 
     def add_data_stage(
         self, data_import_plugin: DataImportPlugin, input_data: InputData
     ) -> None:
         """Adds data stage to the workflow. One node is generated for each file in each dataset"""
         pass
-
-
 
     def visualize(self, output_file: str, high_level: bool = False, **kwargs) -> None:
         from dask.delayed import Delayed
@@ -212,7 +241,6 @@ class Workflow:
         dsk_delayed.visualize(filename=output_file, verbose=True, engine="graphviz", **kwargs)
 
         # self.graph.visualize(filename=output_file, **kwargs)
-
 
     @property
     def graph(self) -> Any:
