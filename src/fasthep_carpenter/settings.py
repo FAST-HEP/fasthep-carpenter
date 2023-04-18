@@ -18,3 +18,18 @@ class Settings:
     blocksize: int = 1_000_000
     profile: bool = False
     plugins: dict[str, Any] = field(default_factory=dict)
+
+
+    @classmethod
+    def from_yaml(cls, filename: str) -> Settings:
+        """Create settings from YAML file"""
+        import yaml
+
+        with open(filename, "r") as file:
+            settings = yaml.safe_load(file)
+        return cls(**settings)
+
+    @classmethod
+    def from_dict(cls, settings: dict[str, Any]) -> Settings:
+        """Create settings from dictionary"""
+        return cls(**settings)
