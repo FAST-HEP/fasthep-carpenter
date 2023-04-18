@@ -418,9 +418,9 @@ class DataMapping(MutableMapping):
 @dataclass
 class ProcessingStepResult:
     data: Any
-    error_code: int
-    error_message: str
-    result: Any
+    error_code: int = 0
+    error_message: str = ""
+    result: Any = None
     bookkeeping: dict[str, Any] = None
     rtype: str = None
     reducer = Callable[[Any], Any]
@@ -433,8 +433,13 @@ class ProcessingStep(Protocol):
     """
     name: str
 
-    def __call__(self, data: DataMapping) -> ProcessingStepResult:
+    def __call__(self, data: ProcessingStepResult) -> ProcessingStepResult:
         ...
+
+    def set_extra(self, **kwargs) -> None:
+        for name, value in kwargs.items():
+            if f"_{name}" in self.__dict__:
+                setattr(self, f"_{name}", value)
 
 
 class ProcessingBackend(Protocol):
