@@ -1,5 +1,5 @@
 """Stages for defining new variables"""
-from functools import partial
+from typing import Any
 
 from fasthep_logging import get_logger
 from ..protocols import DataMapping, ProcessingStep, ProcessingStepResult
@@ -27,6 +27,7 @@ class Define(ProcessingStep):
     _variable_definitions = list[VariableDefinition]
     _variables: list[tuple[str]]
     _tasks: TaskCollection
+    multiplex: bool = True
 
     def __init__(self, name: str, variables: list[VariableDefinition], **kwargs) -> None:
         self._name = name
@@ -37,23 +38,11 @@ class Define(ProcessingStep):
                 self._variables.append((name, expression))
         self._tasks = None
 
-    def __call__(self, data: DataMapping) -> ProcessingStepResult:
-        results = {}
-        for name, expression in self._variables:
-            log.trace(f"Processing {name=} {expression=}")
-            # result = process_expression(data, expression)
-            # results[name] = result
-            # data.add_variable(name, result)
-
-        # add something like result.dask?
-        return ProcessingStepResult(
-            data=data,
-            error_code=0,
-            error_message="",
-            result=results,
-            bookkeeping={self._name: self._variables},
-            # reducer=None,
-        )
+    def __call__(self, data: ProcessingStepResult, name: str, value: Any) -> ProcessingStepResult:
+        log.trace(f"Processing {name=} in stage {self._name}")
+        data.data.add_variable(name, value)
+        data.bookkeeping[(self.__class__.__name__, self._name)] = self._variables
+        return data
 
     def __dask_tokenize__(self):
         return (Define, self._name, self._variable_definitions)
@@ -62,8 +51,7 @@ class Define(ProcessingStep):
     def name(self) -> str:
         return self._name
 
-    # TODO: tasks should be able to created without using a data mapping
-    def tasks(self, data: DataMapping) -> TaskCollection:
+    def tasks(self, data_source: str = "__join__") -> TaskCollection:
         """
         Uses the variable definitions to create a task graph.
 
@@ -88,25 +76,36 @@ class Define(ProcessingStep):
         self._tasks = TaskCollection()
 
         previous_definition = None
-        previous_variable = None
+        # previous_variable = None
+
+        def local_data_source(source):
+            return source.data if isinstance(source, ProcessingStepResult) else source
+
+        local_ds_name = f"__data_source__stage__{self.__class__.__name__}__{self.name}"
+        task_id = get_task_number(local_ds_name)
+        local_ds_name = f"{local_ds_name}-{task_id}"
+        self._tasks.add_task(local_ds_name, local_data_source, data_source)
+
         for i, (name, expression) in enumerate(self._variables):
             # TODO: move to task builder
             task_name = f"define-{self.name}-{i}-{name}"
             task_id = get_task_number(task_name)
             task_name = f"{task_name}-{task_id}"
             ast_wrapper = expression_to_ast(expression)
-            tasks = ast_wrapper.to_tasks(data)
-            if previous_definition:
-                # check each task to see if it depends on the previous definition
-                # if it does, add the previous definition as dependency
-                dependend_tasks = tasks.find_tasks_with_dependency(previous_variable)
-                for dependent in dependend_tasks:
-                    tasks.append_to_task(dependent, previous_definition)
-            self._tasks.update(tasks)
-            partial_add = partial(data.add_variable, name)
-            self._tasks.add_task(task_name, partial_add, tasks.last_task)
-            previous_definition = task_name
-            previous_variable = name
 
+            # if this is the 2nd or later variable, add the previous variable as the data source
+            if previous_definition:
+                new_source = f"__data_source__{previous_definition}"
+                self._tasks.add_task(new_source, local_data_source, previous_definition)
+                tasks = ast_wrapper.to_tasks(new_source)
+            else:
+                tasks = ast_wrapper.to_tasks(local_ds_name)
+            self._tasks.update(tasks)
+
+            if previous_definition:
+                self._tasks.add_task(task_name, self, previous_definition, name, tasks.last_task)
+            else:
+                self._tasks.add_task(task_name, self, data_source, name, tasks.last_task)
+            previous_definition = task_name
 
         return self._tasks
