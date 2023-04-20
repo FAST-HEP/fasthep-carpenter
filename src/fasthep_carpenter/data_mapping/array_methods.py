@@ -43,7 +43,6 @@ class Uproot4Methods(ArrayMethodsProtocol):
 
     @staticmethod
     def arrays(data: Any, expressions: str, *args, **kwargs) -> Any:
-        print(kwargs)
         if "outputtype" in kwargs:
             # renamed uproot3 -> uproot4
             outputtype = kwargs.pop("outputtype")

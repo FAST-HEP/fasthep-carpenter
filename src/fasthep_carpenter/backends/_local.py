@@ -16,8 +16,6 @@ class NewProcessingBackend():
 class LocalBackend(NewProcessingBackend):
 
     def execute(self, workflow: Workflow, settings: Settings) -> tuple[Any]:
-        print(workflow)
-        print(workflow.graph.to_dict())
         workflow.visualize("local-workflow.png")
         # we cheat here a bit and use Dask
         from dask.distributed import Client, performance_report

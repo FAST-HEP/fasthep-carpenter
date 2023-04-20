@@ -17,6 +17,8 @@ class DataSource(ProcessingStep):
     _datasets: InputData
     _settings: Settings
     _tasks: TaskCollection
+    _require_multiplex: bool = False
+    multiplex: bool = False
 
     def __init__(self, name, data_import, paths, **kwargs) -> None:
         self._name = name
@@ -51,11 +53,10 @@ class DataSource(ProcessingStep):
                 task_name = f"{name_tmp}-{task_id}"
                 self._tasks.add_task(task_name, self, input_file_name)
 
-    @property
-    def graph(self) -> TaskGraph:
+    def tasks(self, data_source: str = None) -> TaskCollection:
         if not self._tasks:
             self.__create_tasks()
-        return self._tasks.graph
+        return self._tasks
 
     @property
     def name(self) -> str:

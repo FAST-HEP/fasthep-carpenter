@@ -421,7 +421,7 @@ class ProcessingStepResult:
     error_code: int = 0
     error_message: str = ""
     result: Any = None
-    bookkeeping: dict[str, Any] = None
+    bookkeeping: dict[str, Any] = field(default_factory=dict)
     rtype: str = None
     reducer = Callable[[Any], Any]
 
