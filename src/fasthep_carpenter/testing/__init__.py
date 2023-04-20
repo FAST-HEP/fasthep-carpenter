@@ -69,10 +69,19 @@ def execute_task(task: Task):
 def execute_tasks(tasks: TaskCollection) -> Any:
     """Execute a task collection using the distributed scheduler."""
     from dask.distributed import Client
+
     client = Client()
     try:
         result = client.get(tasks.graph, tasks.last_task)
-        client.close()
         return result
     except KeyError as e:
         raise KeyError(f"A task failed to execute: {e}")
+    finally:
+        client.close()
+
+
+def visualize_tasks(tasks: TaskCollection, filename: str) -> None:
+    """Visualize a task graph."""
+    from dask.delayed import Delayed
+    dsk_delayed = Delayed("w", tasks.graph)
+    dsk_delayed.visualize(filename=filename, verbose=True, engine="graphviz")
