@@ -1,12 +1,17 @@
 from collections import defaultdict
 
+import copy
 from dask import visualize
 from dask.delayed import Delayed
 from dask.utils import apply
 from typing import Any, Callable
 
+from fasthep_logging import get_logger
+
 from .settings import Settings
 from .protocols import DataImportPlugin, InputData, ProcessingStep
+
+log = get_logger("FASTHEP::Carpenter")
 
 # very general task definition
 Task = tuple[Callable[[Any], Any], Any]
@@ -152,14 +157,9 @@ class TaskCollection:
         return list(self._find_tasks_with_dependency(dependency))
 
 
-def __do_nothing__(*args, **kwargs):
-    return args, kwargs
-
-
 class Workflow:
     layers: dict[str, TaskGraph]
     dependencies: dict[str, set[str]]
-    last_task: Any
     """Creates layers of tasks to be executed in a workflow.
     e.g. read-csv -> add -> filter -> ...
     {
@@ -188,15 +188,28 @@ class Workflow:
 
         # create tasks for each stage in the sequence
         previous_stage = None
-        for stage in sequence:
-            current_stage = stage.name
-            stage.set_extra(datasets=datasets, settings=settings)
+        multiplex_tasks = []
+        multiplex_tasks_previous = []
 
-            self.dependencies[current_stage] = {previous_stage} if previous_stage else set()
-            if hasattr(stage, "graph") or isinstance(getattr(type(stage), "graph", None), property):
-                print("custom graph", "--" * 10)
-                graph = stage.graph
-                self.layers[current_stage] = graph
+        for stage in sequence:
+            current_stage = stage
+            multiplex_tasks.clear()
+            stage.set_extra(datasets=datasets, settings=settings)
+            self.dependencies[current_stage.name] = {previous_stage.name} if previous_stage else set()
+
+            if hasattr(stage, "tasks"):
+                log.debug("Loading custom tasks for %s %s", "--" * 10, stage.name)
+                # TODO: this is not correct, we need to multiplex here
+                if hasattr(stage, "multiplex") and stage.multiplex and previous_stage is not None:
+                    log.debug("Multiplexing tasks for %s", stage.name)
+                    self.layers[current_stage.name] = {}
+                    data_sources = multiplex_tasks_previous if previous_stage.multiplex else self.layers[previous_stage.name]
+                    multiplex_tasks = self._multiplex(stage, data_sources)
+                else:
+                    tasks = stage.tasks(data_source=previous_stage.tasks().last_task if previous_stage else None)
+                    self.layers[current_stage.name] = tasks.graph
+
+                multiplex_tasks_previous = copy.deepcopy(multiplex_tasks)
                 previous_stage = current_stage
                 continue
 
@@ -204,25 +217,41 @@ class Workflow:
             tasks = TaskCollection()
             # multiplex the previous stage tasks to the current stage
             if previous_stage is None:
-                task_id = get_task_number(current_stage)
-                task_name = f"{current_stage}-{task_id}"
+                task_id = get_task_number(current_stage.name)
+                task_name = f"{current_stage.name}-{task_id}"
                 tasks.add_task(task_name, stage)
-                self.layers[current_stage] = tasks.graph
+                self.layers[current_stage.name] = tasks.graph
                 previous_stage = current_stage
                 continue
 
-            for previous in self.layers[previous_stage]:
-                task_id = get_task_number(current_stage)
-                task_name = f"{current_stage}-{task_id}"
+            for previous in self.layers[previous_stage.name]:
+                task_id = get_task_number(current_stage.name)
+                task_name = f"{current_stage.name}-{task_id}"
                 tasks.add_task(task_name, stage, previous)
-            self.layers[current_stage] = tasks.graph
+            self.layers[current_stage.name] = tasks.graph
             previous_stage = current_stage
 
+        # add a final stage to collect all the results
+        from .stages._final import Final
+        final = Final()
+        final.set_extra(datasets=datasets, settings=settings)
+
         self.layers["__finalize__"] = {
-            ("__finalize__", 0): (__do_nothing__, *self.layers[previous_stage].keys())
+            ("__finalize__", "DONE"): (final, *self.layers[previous_stage.name].keys())
         }
-        self.dependencies["__finalize__"] = {previous_stage}
-        self.last_task = ("__finalize__", 0)
+        self.dependencies["__finalize__"] = {previous_stage.name}
+        self.last_task = ("__finalize__", "DONE")
+
+    def _multiplex(self, stage: ProcessingStep, data_sources: list[str]) -> None:
+        multiplex_tasks = []
+        if stage.name == "file_output":
+            print("multiplexing file output over {} data sources".format(len(data_sources)))
+        for previous in data_sources:
+            tasks = stage.tasks(data_source=previous)
+            self.layers[stage.name].update(copy.deepcopy(tasks.graph))
+            multiplex_tasks.append(tasks.last_task)
+            stage._tasks = None
+        return multiplex_tasks
 
     def add_data_stage(
         self, data_import_plugin: DataImportPlugin, input_data: InputData
