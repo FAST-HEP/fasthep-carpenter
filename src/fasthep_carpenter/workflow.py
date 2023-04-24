@@ -77,6 +77,7 @@ class TaskCollection:
         if not kwargs:
             self._tasks[task_name] = (*args,)
         else:
+            # this one is not always resolving correctly (dask string -> data)
             self._tasks[task_name] = (apply, args[0], args[1:], kwargs)
         if self.first_task is None:
             self.first_task = task_name
