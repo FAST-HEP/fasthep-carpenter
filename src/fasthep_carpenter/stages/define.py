@@ -41,7 +41,7 @@ class Define(ProcessingStep):
     def __call__(self, data: ProcessingStepResult, name: str, value: Any) -> ProcessingStepResult:
         log.trace(f"Processing {name=} in stage {self._name}")
         data.data.add_variable(name, value)
-        data.bookkeeping[(self.__class__.__name__, self._name)] = self._variables
+        data.bookkeeping[(self.__class__.__name__, self._name)] = self.__dask_tokenize__()
         return data
 
     def __dask_tokenize__(self):
