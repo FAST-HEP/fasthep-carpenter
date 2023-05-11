@@ -424,6 +424,8 @@ class ProcessingStepResult:
     bookkeeping: dict[str, Any] = field(default_factory=dict)
     rtype: str = None
     reducer = Callable[[Any], Any]
+    metadata: dict[str, Any] = field(default_factory=dict)
+    filters: list[Any] = field(default_factory=list)
 
 
 class ProcessingStep(Protocol):

@@ -31,7 +31,7 @@ class DataSource(ProcessingStep):
         self._settings = None
         self._tasks = None
 
-    def __call__(self, input_file_name: str) -> ProcessingStepResult:
+    def __call__(self, input_file_name: str, dataset: str) -> ProcessingStepResult:
         input_file = self._data_import_plugin.open([input_file_name])
         data = create_mapping(
             input_file,
@@ -42,7 +42,12 @@ class DataSource(ProcessingStep):
 
         return ProcessingStepResult(
             data=data,
+            bookkeeping={(self.__class__.__name__, self._name): self.__dask_tokenize__()},
+            metadata={"dataset": dataset, "input_file": input_file_name},
         )
+
+    def __dask_tokenize__(self):
+        return (DataSource, self._name, self._data_import, self._paths)
 
     def __create_tasks(self) -> None:
         self._tasks = TaskCollection()
@@ -51,7 +56,7 @@ class DataSource(ProcessingStep):
             for input_file_name in dataset.files:
                 task_id = get_task_number(name_tmp)
                 task_name = f"{name_tmp}-{task_id}"
-                self._tasks.add_task(task_name, self, input_file_name)
+                self._tasks.add_task(task_name, self, input_file_name, dataset)
 
     def tasks(self, data_source: str = None) -> TaskCollection:
         if not self._tasks:
