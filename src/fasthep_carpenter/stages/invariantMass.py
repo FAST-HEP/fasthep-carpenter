@@ -5,6 +5,10 @@
 
 from typing import Any
 
+import awkward as ak
+import numpy as np
+import vector
+
 from fasthep_logging import get_logger
 
 from ..protocols import DataMapping, ProcessingStep, ProcessingStepResult
@@ -18,8 +22,7 @@ def create_4_vector(vector_data) -> Any:
     """
     Creates a 4-vector from the given components.
     """
-    import vector
-    vector.register_awkward()
+
     px, py, pz, energy = vector_data
     return vector.zip({
         "px": px,
@@ -29,14 +32,12 @@ def create_4_vector(vector_data) -> Any:
     })
 
 
-def create_combinations(data, n, fields):
-    import awkward as ak
-    import numpy as np
+def create_combinations(data, n: int, fields) -> (ak.Array | ak.Record):
     with np.errstate(invalid="ignore"):
         return ak.combinations(data, n, fields=fields)
 
 
-def invariant_mass(combinations):
+def invariant_mass(combinations: ak.Array) -> ak.Array:
     return (combinations.p1 + combinations.p2).mass
 
 
@@ -57,7 +58,6 @@ class InvariantMass(ProcessingStep):
     def __call__(self, data: ProcessingStepResult, name: str, value: Any) -> ProcessingStepResult:
         """"""
         log.trace(f"Processing {name=} in stage {self._name}")
-        print("InvariantMass.__call__", name, value)
         data.data.add_variable(name, value)
         data.bookkeeping[(self.__class__.__name__, self._name)] = self.__dask_tokenize__()
         return data
@@ -90,7 +90,7 @@ class InvariantMass(ProcessingStep):
             else:
                 arrays = data.arrays(fourVector, how=tuple)
                 mask_data = data[mask]
-                return (a[mask_data] for a in arrays)
+                return (ak.mask(a, mask_data) for a in arrays)
 
         local_ds_name = f"__data_source__stage__{self.__class__.__name__}__{self.name}"
         task_id = get_task_number(local_ds_name)
@@ -102,6 +102,7 @@ class InvariantMass(ProcessingStep):
         vector_source = f"{vector_source}-{task_id}"
         # partial_func = partial(get_vector_data, fourVector=fourVector, mask=mask)
         self._tasks.add_task(vector_source, get_vector_data, local_ds_name, fourVector, mask)
+
         # create vector of 4-momenta
         task_name = f"__{self.__class__.__name__}_create_4_vector"
         task_id = get_task_number(task_name)
@@ -117,6 +118,7 @@ class InvariantMass(ProcessingStep):
         previous_task = task_name
 
         # calculate invariant mass
+        # bug: dask performance report has an issue with this: Sizeof calculation failed
         task_name = f"__{self.__class__.__name__}_invariant_mass"
         task_id = get_task_number(task_name)
         task_name = f"{task_name}-{task_id}"
