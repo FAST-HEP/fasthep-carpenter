@@ -21,7 +21,15 @@ def _constant(x):
     return x
 
 
-SUPPORTED_FUNCTIONS = {
+# we need this to support either one awkward array or lists of awkward arrays
+# pairs([Muon_E, Muon_Px, Muon_Py, Muon_Pz]) -> pairs of muon 4-vectors
+# pairs(Muon_Pt) -> pairs of muon pT
+# def pairs(collection: Iterable) -> Iterable:
+#     """Yield pairs of elements from a collection."""
+#     return ak.combinations(collection, 2)
+
+
+SUPPORTED_FUNCTIONS={
     "add": ak.Array.__add__,
     "eval": ak._connect.numexpr.evaluate,
     "sqrt": np.sqrt,
