@@ -225,10 +225,21 @@ class Workflow:
                 previous_stage = current_stage
                 continue
 
-            for previous in self.layers[previous_stage.name]:
+            if hasattr(stage, "multiplex") and stage.multiplex:
+                log.debug("Multiplexing tasks for %s", stage.name)
+                self.layers[current_stage.name] = {}
+                data_sources = multiplex_tasks_previous if previous_stage.multiplex else self.layers[previous_stage.name]
+                multiplex_tasks = []
+                for data_source in data_sources:
+                    task_id = get_task_number(current_stage.name)
+                    task_name = f"{current_stage.name}-{task_id}"
+                    multiplex_tasks.append(task_name)
+                    tasks.add_task(task_name, stage, data_source)
+                multiplex_tasks_previous = copy.deepcopy(multiplex_tasks)
+            else:
                 task_id = get_task_number(current_stage.name)
                 task_name = f"{current_stage.name}-{task_id}"
-                tasks.add_task(task_name, stage, previous)
+                tasks.add_task(task_name, stage, self.layers[previous_stage.name])
             self.layers[current_stage.name] = tasks.graph
             previous_stage = current_stage
 
