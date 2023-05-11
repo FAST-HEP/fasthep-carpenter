@@ -20,6 +20,6 @@ class LocalBackend(NewProcessingBackend):
         # we cheat here a bit and use Dask
         from dask.distributed import Client, performance_report
         client = Client()
-        with performance_report(filename="dask-report.html"):
-            result = client.get(workflow.graph, workflow.last_task)
+        # with performance_report(filename="dask-report.html"):
+        result = client.get(workflow.graph, workflow.last_task)
         return result
