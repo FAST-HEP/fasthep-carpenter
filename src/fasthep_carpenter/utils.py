@@ -37,3 +37,24 @@ def unregister_from_collection(
 def string_to_short_hash(string: str) -> str:
     """Convert a string to a short hash."""
     return hashlib.sha1(string.encode()).hexdigest()[:8]
+
+
+def combine_weights(weights: dict[str, Any]) -> Any:
+    from functools import reduce
+    import operator
+
+    return reduce(operator.mul, weights.values(), 1.0)
+
+
+def broadcast_weights(arrays: dict[str, Any], weights: dict[str, Any]) -> dict[str, Any]:
+    import awkward as ak
+
+    weight = combine_weights(weights)
+    return {k: ak.broadcast_arrays(weight, v)[0] for k, v in arrays.items()}
+
+
+def flatten_and_remove_none(arrays: dict[str, Any]) -> dict[str, Any]:
+    import awkward as ak
+    arrays = {k: ak.flatten(v, axis=1) for k, v in arrays.items()}
+    arrays = {k: v[~ak.is_none(v)] for k, v in arrays.items()}
+    return arrays
