@@ -24,6 +24,7 @@ class FileOutput(ProcessingStep):
       content:
         - NGoodMuons
         - Muon_pt
+        - __histogram__*
 
     """
 
