@@ -421,11 +421,11 @@ class ProcessingStepResult:
     error_code: int = 0
     error_message: str = ""
     result: Any = None
-    bookkeeping: dict[str, Any] = field(default_factory=dict)
+    bookkeeping: dict[Any, Any] = field(default_factory=dict)
     rtype: str = None
     reducer = Callable[[Any], Any]
     metadata: dict[str, Any] = field(default_factory=dict)
-    filters: list[Any] = field(default_factory=list)
+    filters: dict[str, Any] = field(default_factory=dict)
 
 
 class ProcessingStep(Protocol):
