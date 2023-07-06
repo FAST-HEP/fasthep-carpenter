@@ -7,22 +7,23 @@ from ..utils import broadcast_weights, flatten_and_remove_none
 
 log = get_logger("FASTHEP::Carpenter")
 
+Binning = dict[str, tuple[int, float, float]]
 
 class Histogram(ProcessingStep):
     _name: str
     _prefix: str = "__histogram__"
-    _binning: dict[str, tuple[float, float, int]]
+    _binning: Binning
     _weights: dict[str, str] | None
     multiplex: bool = True
 
     def __init__(
         self,
         name: str,
-        binning: dict[str, tuple[float, float, int]],
+        binning: Binning,
         weights: dict[str, str] | None = None,
         **kwargs,
     ) -> None:
-        self._name = name
+        self._name = self._prefix + name
         self._binning = binning
         self._weights = weights
 
