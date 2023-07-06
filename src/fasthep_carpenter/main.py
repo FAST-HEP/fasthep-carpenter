@@ -67,7 +67,7 @@ def run(dataset_cfg: Path, sequence_cfg: Path, output_dir: str, processing_backe
     # TODO
 
     # print summary of results (details in processing_report.html)
-    rich.print(f"[blue]Results[/]: {results}")
+    # rich.print(f"[blue]Results[/]: {results}")
     rich.print(f"[blue]Output written to directory {output_dir}[/]")
 
 
