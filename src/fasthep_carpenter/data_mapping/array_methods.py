@@ -23,7 +23,7 @@ class Uproot4Methods(ArrayMethodsProtocol):
 
     @staticmethod
     def arraydict_to_pandas(arraydict: Dict[str, Any]) -> pd.DataFrame:
-        return ak.to_pandas(arraydict)
+        return ak.to_dataframe(arraydict)
 
     @staticmethod
     def awkward_from_iter(data: Iterable) -> Any:
@@ -31,7 +31,7 @@ class Uproot4Methods(ArrayMethodsProtocol):
 
     @staticmethod
     def evaluate(data: Any, expression: str, **kwargs) -> Any:
-        return ak.numexpr.evaluate(expression, data, **kwargs)
+        return ak._connect.numexpr.evaluate(expression, data, **kwargs)
 
     @staticmethod
     def contains(data: Any, key: str) -> bool:

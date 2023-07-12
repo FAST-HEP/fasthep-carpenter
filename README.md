@@ -42,3 +42,40 @@ A tool from the [FAST-HEP](http://fast-hep.web.cern.ch/) collaboration.
 ## Installation and usage
 
 Visit the `documentation <https://fasthep-carpenter.readthedocs.io/>`_ for full details.
+
+## Developing this package
+
+This package is compatible with Python >= 3.10
+
+Install the package and dependencies
+
+```bash
+pip install .[dev]
+```
+
+### Running tests
+
+Install the Graphviz exectuable. This can be installed via `conda`
+
+```bash
+conda install python-graphviz
+```
+
+Install test dependencies
+
+```bash
+pip install .[test]
+```
+
+Download test files via the FAST-HEP CLI
+
+```bash
+pip install "fasthep[dev]"
+fasthep download --json tests/data/remote_data.json --destination tests/data/
+```
+
+Run the test suite
+
+```bash
+python -m pytest
+```
