@@ -1,4 +1,4 @@
-name: Pytest
+name: Run Python tests via Pytest
 
 on:
   push:
@@ -29,12 +29,9 @@ jobs:
       - name: Set up Graphviz      
         uses: ts-graphviz/setup-graphviz@v1
 
-      - name: Upgrade pip
-        run: python -m pip install --upgrade pip
-
-      - name: Install self and dependencies
+      - name: Upgrade pip and install package
         run: |
-          python -m pip install pytest pytest-lazy-fixture
+          python -m pip install --upgrade pip
           python -m pip install ".[dev,test]"
 
       - name: Download test files
