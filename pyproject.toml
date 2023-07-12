@@ -39,18 +39,22 @@ classifiers = [
 
 dynamic = ["version"]
 dependencies = [
+  "asyncio",
+  "awkward>=2.3.1",
+  "coffea<0.9.0",
+  "dask[distributed]",
   "fast-flow>0.5.0",
   "fast-curator",
   "fasthep-logging",
-  "awkward",
-  "coffea<0.9.0",
-  "pandas>=1.1",
-  "numpy==1.21.0; python_version < \"3.9\"",
-  "numpy>= 1.18.5; python_version > \"3.8\"",
+  "graphviz",
+  "numpy>= 1.18.5",
   "numexpr",
+  "pandas>=1.1",
+  "typer",
   "typing-extensions>=4.1.1",
-  "uproot<6.0.0",
+  "uproot>=5.0.10",
   "uproot3>=3.14.0",
+  "vector>=1.1.0",
 ]
 
 [project.optional-dependencies]
@@ -58,6 +62,7 @@ test = [
   "pytest >=6",
   "pytest-runner",
   "flake8",
+  "pytest-asyncio",
   "pytest-cov",
   "pytest-lazy-fixture",
 ]

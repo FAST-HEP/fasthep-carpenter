@@ -9,11 +9,12 @@ def mkdir_p(path: Path | str) -> None:
 
 
 def list_python_packages_with_versions() -> dict[str, str]:
-    import pkg_resources
+    from importlib import metadata
+    dists = metadata.distributions()
 
     return {
-        dist.project_name: dist.version
-        for dist in pkg_resources.working_set
+        dist.metadata["Name"]: dist.version
+        for dist in dists
         if dist.project_name != "pip"
     }
 
