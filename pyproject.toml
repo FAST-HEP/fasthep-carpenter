@@ -53,7 +53,6 @@ dependencies = [
   "typer",
   "typing-extensions>=4.1.1",
   "uproot>=5.0.10",
-  "uproot3>=3.14.0",
   "vector>=1.1.0",
 ]
 
