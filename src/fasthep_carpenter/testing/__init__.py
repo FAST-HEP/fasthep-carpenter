@@ -70,7 +70,9 @@ def execute_tasks(tasks: TaskCollection) -> Any:
     """Execute a task collection using the distributed scheduler."""
     from dask.distributed import Client
 
-    client = Client()
+    client = Client(
+        asynchronous=False,
+    )
     try:
         result = client.get(tasks.graph, tasks.last_task)
         return result
