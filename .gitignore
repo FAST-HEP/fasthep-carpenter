@@ -223,3 +223,6 @@ data
 data/**
 snapshots/
 .hepflow/**
+
+# hatch-vcs generated version file
+src/fasthep_carpenter/_version.py

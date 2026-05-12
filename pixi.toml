@@ -1,0 +1,30 @@
+[workspace]
+name = "fasthep-carpenter"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[dependencies]
+python = ">=3.11"
+pip = "*"
+python-build = "*"
+hatchling = "*"
+hatch-vcs = "*"
+pytest = "*"
+ruff = "*"
+mypy = "*"
+pre-commit = "*"
+codespell = "*"
+
+[pypi-dependencies]
+fasthep-flow = { path = "../fasthep-flow", editable = true }
+fasthep-carpenter = { path = ".", editable = true }
+
+[tasks]
+format = "ruff format src tests"
+lint = "ruff check src tests"
+lint-fix = "ruff check --fix src tests"
+typecheck = "mypy src tests"
+test = "pytest"
+build = "python -m build"
+check = { depends-on = ["lint", "typecheck", "test"] }
+ci = { depends-on = ["check", "build"] }
