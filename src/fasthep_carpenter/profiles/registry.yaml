@@ -1,0 +1,54 @@
+registry:
+  sources:
+    root_tree:
+      spec: fasthep_carpenter.spec.read.root_tree:ROOT_TREE_SOURCE_SPEC
+      impl: fasthep_carpenter.impl.read.root_tree:run_root_tree_source
+
+  transforms:
+    hep.project_fields:
+      spec: fasthep_carpenter.spec.project_fields:PROJECT_FIELDS_SPEC
+      impl: fasthep_carpenter.impl.project_fields:run_project_fields
+
+    hep.zip_join:
+      spec: fasthep_carpenter.spec.zip_join:ZIP_JOIN_SPEC
+      impl: fasthep_carpenter.impl.zip_join:run_zip_join
+
+    hep.define:
+      spec: fasthep_carpenter.spec.define_transform:DEFINE_TRANSFORM_SPEC
+      impl: fasthep_carpenter.impl.define:run_define_transform
+
+    hep.selection.cutflow:
+      spec: fasthep_carpenter.spec.cutflow_transform:CUTFLOW_TRANSFORM_SPEC
+      impl: fasthep_carpenter.impl.cutflow:run_cutflow_transform
+
+    hep.hist:
+      spec: fasthep_carpenter.spec.hist_transform:HIST_TRANSFORM_SPEC
+      impl: fasthep_carpenter.impl.make_hist:run_hist_transform
+
+    hep.di_object_mass:
+      spec: fasthep_carpenter.spec.di_object_mass_transform:DI_OBJECT_MASS_TRANSFORM_SPEC
+      impl: fasthep_carpenter.impl.di_object_mass:run_di_object_mass_transform
+
+    cms.match_l1t_jets:
+      spec: fasthep_carpenter.spec.cms.match_l1t_jets_transform:CMS_MATCH_L1T_JETS_TRANSFORM_SPEC
+      impl: fasthep_carpenter.impl.cms.match_l1t_jets:run_match_l1t_jets_transform
+
+  sinks:
+    root_tree:
+      spec: fasthep_carpenter.spec.write.root_tree:ROOT_TREE_WRITE_SPEC
+      impl: fasthep_carpenter.impl.write.root_tree:run_root_tree_write
+
+  functions:
+    sqrt: numpy:sqrt
+    abs: numpy:abs
+    log: numpy:log
+    log10: numpy:log10
+    exp: numpy:exp
+    where: numpy:where
+    fill_none: awkward:fill_none
+    pad_none: awkward:pad_none
+    nth: fasthep_carpenter.expr_helpers:nth
+    leading: fasthep_carpenter.expr_helpers:leading
+    subleading: fasthep_carpenter.expr_helpers:subleading
+
+  constants: {}

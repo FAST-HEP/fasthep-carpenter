@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "fasthep-carpenter"
+version = "0.1.0"
+description = "HEP analysis components for FAST-HEP workflows."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fasthep-flow",
+    "awkward",
+    "uproot",
+    "numpy",
+    "hist",
+]
+
+[project.optional-dependencies]
+test = [
+    "pytest",
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.package-data]
+"fasthep_carpenter.profiles" = ["**/*.yaml"]
