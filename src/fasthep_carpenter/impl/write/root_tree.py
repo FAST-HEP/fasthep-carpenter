@@ -5,7 +5,6 @@ from typing import Any
 
 import awkward as ak
 import uproot
-
 from hepflow.model.io import OutputResult
 
 

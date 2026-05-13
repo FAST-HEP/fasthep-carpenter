@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from hepflow.model.ops import (
     OpSpec,
     RequireParse,
@@ -5,7 +7,6 @@ from hepflow.model.ops import (
     TemplateProvide,
     TemplateReq,
 )
-
 
 HEP_DI_OBJECT_MASS_SPEC = OpSpec(
     requires=(

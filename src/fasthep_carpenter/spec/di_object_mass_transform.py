@@ -5,7 +5,6 @@ from typing import Any
 from hepflow.compiler.expr_symbols import data_symbols_in_expr
 from hepflow.model.data_flow import DataDependencyResult
 
-
 DI_OBJECT_MASS_TRANSFORM_SPEC = {
     "name": "hep.di_object_mass",
     "kind": "transform",

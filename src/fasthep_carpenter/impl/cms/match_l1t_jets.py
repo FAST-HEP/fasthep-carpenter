@@ -1,13 +1,15 @@
+from __future__ import annotations
+
 from typing import Any
 
 import awkward as ak
 import numpy as np
+from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 
 from fasthep_carpenter.impl.compat import (
     legacy_data_envelope,
     unwrap_legacy_data_envelope,
 )
-from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 
 
 def _wrap_delta_phi(dphi: ak.Array) -> ak.Array:
@@ -32,7 +34,10 @@ def run_match_l1t_jets(
     stream_name = (
         params.get("stream") or ctx.get("primary_stream") or DEFAULT_PRIMARY_STREAM_ID
     )
-    events: dict[str, ak.Array] = data.get(stream_name)
+    if stream_name not in data:
+        msg = f"missing stream: {stream_name}"
+        raise KeyError(msg)
+    events: dict[str, ak.Array] = data[stream_name]
 
     reco_et = events[params["reco"]["et"]]
     reco_eta = events[params["reco"]["eta"]]

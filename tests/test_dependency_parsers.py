@@ -123,4 +123,4 @@ def test_cms_match_l1t_jets_data_dependencies() -> None:
         "l1_jetEta",
         "l1_jetPhi",
     } <= deps.consumes
-    assert MATCH_L1T_JETS_OUTPUTS <= deps.produces
+    assert deps.produces >= MATCH_L1T_JETS_OUTPUTS

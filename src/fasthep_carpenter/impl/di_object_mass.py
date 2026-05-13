@@ -1,15 +1,17 @@
+from __future__ import annotations
+
 from typing import Any
 
 import awkward as ak
 import numpy as np
+from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
+from hepflow.runtime.engine import eval_expr
 
 from fasthep_carpenter.impl.compat import (
     legacy_data_envelope,
     unwrap_legacy_data_envelope,
 )
 from fasthep_carpenter.spec.di_object_mass_transform import di_object_mass_output_name
-from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
-from hepflow.runtime.engine import eval_expr
 
 
 def _two_object_mass(px, py, pz, E) -> Any:
@@ -40,8 +42,7 @@ def _two_object_mass(px, py, pz, E) -> Any:
     m = np.sqrt(m2)
 
     # Replace missing with nan (so hist fill ignores if you mask later, or you can mask explicitly)
-    m = ak.fill_none(m, np.nan)
-    return m
+    return ak.fill_none(m, np.nan)
 
 
 def run_di_object_mass(

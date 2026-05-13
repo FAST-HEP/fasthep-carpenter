@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import importlib.resources as resources
 
-import fasthep_carpenter
 from hepflow.registry.loaders import load_object
+
+import fasthep_carpenter
 
 
 def test_import_package() -> None:

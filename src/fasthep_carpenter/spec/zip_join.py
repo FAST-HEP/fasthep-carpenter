@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 ZIP_JOIN_SPEC = {
     "name": "hep.zip_join",
     "kind": "transform",

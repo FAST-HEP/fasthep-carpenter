@@ -4,7 +4,6 @@ from typing import Any
 
 from hepflow.model.data_flow import DataDependencyResult
 
-
 PROJECT_FIELDS_SPEC = {
     "name": "core.project_fields",
     "kind": "transform",

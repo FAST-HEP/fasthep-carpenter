@@ -24,7 +24,7 @@ classifiers = [
     "Typing :: Typed",
 ]
 dependencies = [
-    "fasthep-flow",
+    "fasthep-flow>=2026.5.0",
     "awkward",
     "uproot",
     "numpy",
@@ -104,6 +104,13 @@ required-imports = ["from __future__ import annotations"]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["T20", "ARG"]
+"src/fasthep_carpenter/impl/**/*.py" = [
+  "ARG001",  # Registry call signatures may include optional ctx
+]
+
+"src/fasthep_carpenter/spec/**/*.py" = [
+  "ARG001",  # Spec/parser protocol signatures are intentionally uniform
+]
 
 [tool.pytest.ini_options]
 minversion = "6.0"

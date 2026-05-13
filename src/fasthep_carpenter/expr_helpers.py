@@ -1,7 +1,8 @@
 from __future__ import annotations
 
-import awkward as ak
 from typing import Any
+
+import awkward as ak
 
 
 def nth(values: Any, index: int, default: Any = 0.0) -> Any:

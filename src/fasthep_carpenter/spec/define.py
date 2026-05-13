@@ -1,6 +1,6 @@
-from hepflow.model.ops import OpSpec
-from hepflow.model.ops import RequireParse, ValueFromParamProvide
+from __future__ import annotations
 
+from hepflow.model.ops import OpSpec, RequireParse, ValueFromParamProvide
 
 HEP_DEFINE_SPEC = OpSpec(
     requires=(

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 ROOT_TREE_WRITE_SPEC = {
     "name": "root_tree",
     "kind": "writer",

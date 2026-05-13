@@ -1,5 +1,6 @@
-from hepflow.model.ops import OpSpec, RequireParse, ValueProvide
+from __future__ import annotations
 
+from hepflow.model.ops import OpSpec, RequireParse, ValueProvide
 
 CMS_MATCH_L1T_JETS_SPEC = OpSpec(
     requires=(

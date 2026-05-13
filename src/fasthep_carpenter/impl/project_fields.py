@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any
 
 import awkward as ak
-
 from hepflow.runtime.records import get_field_by_branch
 
 

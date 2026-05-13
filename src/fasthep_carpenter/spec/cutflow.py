@@ -1,5 +1,6 @@
-from hepflow.model.ops import OpSpec, RequireParse, ValueFromParamProvide
+from __future__ import annotations
 
+from hepflow.model.ops import OpSpec, RequireParse, ValueFromParamProvide
 
 HEP_SELECTION_CUTFLOW_SPEC = OpSpec(
     requires=(

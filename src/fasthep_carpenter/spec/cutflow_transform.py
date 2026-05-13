@@ -5,7 +5,6 @@ from typing import Any
 from hepflow.compiler.expr_symbols import data_symbols_in_expr
 from hepflow.model.data_flow import DataDependencyResult
 
-
 CUTFLOW_TRANSFORM_SPEC = {
     "name": "hep.selection.cutflow",
     "kind": "transform",

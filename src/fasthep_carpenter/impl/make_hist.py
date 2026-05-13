@@ -1,19 +1,21 @@
+from __future__ import annotations
+
 from typing import Any
 
 import awkward as ak
 import hist
+from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
+from hepflow.runtime.engine import eval_expr
+from hepflow.runtime.stream_readers import get_stream_array
 
 from fasthep_carpenter.impl.compat import (
     legacy_data_envelope,
     unwrap_legacy_data_envelope,
 )
-from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
-from hepflow.runtime.engine import eval_expr
-from hepflow.runtime.stream_readers import get_stream_array
 
 
 def _make_hist(axes: list[dict[str, Any]], storage: str) -> hist.Hist:
-    h_axes = []
+    h_axes: list[Any] = []
     for ax in axes:
         t = ax["type"]
         name = ax["name"]

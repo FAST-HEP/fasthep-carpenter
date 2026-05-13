@@ -5,7 +5,6 @@ from typing import Any
 from hepflow.compiler.expr_symbols import data_symbols_in_expr
 from hepflow.model.data_flow import DataDependencyResult
 
-
 HIST_TRANSFORM_SPEC = {
     "name": "hep.hist",
     "kind": "transform",

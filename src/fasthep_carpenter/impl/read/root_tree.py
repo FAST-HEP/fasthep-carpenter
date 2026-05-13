@@ -12,7 +12,6 @@ def run_root_tree_source(
     datasets: list[dict[str, Any]],
     defaults: dict[str, Any] | None = None,
     tree: str,
-    stream_type: str = "event_stream",
     branches: list[str] | None = None,
     start: int | None = None,
     stop: int | None = None,
@@ -56,10 +55,7 @@ def run_root_tree_source(
             for path in files
         ]
 
-        if len(arrays) == 1:
-            merged = arrays[0]
-        else:
-            merged = ak.concatenate(arrays, axis=0)
+        merged = arrays[0] if len(arrays) == 1 else ak.concatenate(arrays, axis=0)
 
         out[name] = merged
 
