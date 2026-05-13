@@ -1,7 +1,5 @@
 # fasthep-carpenter
 
-# fasthep-carpenter
-
 [![CI](https://github.com/FAST-HEP/fasthep-carpenter/actions/workflows/ci.yml/badge.svg)](https://github.com/FAST-HEP/fasthep-carpenter/actions/workflows/ci.yml)
 [![PyPI](https://img.shields.io/pypi/v/fasthep-carpenter)](https://pypi.org/project/fasthep-carpenter/)
 [![Python Versions](https://img.shields.io/pypi/pyversions/fasthep-carpenter)](https://pypi.org/project/fasthep-carpenter/)
