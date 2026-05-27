@@ -3,8 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
-from fasthep_carpenter.impl.read.root_tree import run_root_tree_source
 from hepflow.api import compile_author_file
+
+from fasthep_carpenter.impl.read.root_tree import run_root_tree_source
 
 
 def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path) -> None:
