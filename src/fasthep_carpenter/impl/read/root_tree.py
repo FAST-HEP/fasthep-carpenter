@@ -12,6 +12,7 @@ def run_root_tree_source(
     datasets: list[dict[str, Any]],
     defaults: dict[str, Any] | None = None,
     tree: str,
+    stream_type: str | None = None,
     branches: list[str] | None = None,
     start: int | None = None,
     stop: int | None = None,

@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import yaml
+from fasthep_carpenter.impl.read.root_tree import run_root_tree_source
 from hepflow.api import compile_author_file
 
 
@@ -55,3 +56,14 @@ def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path
         "fasthep_carpenter.impl.define:run_define_transform"
     )
     assert "read.events" in {node.id for node in plan.nodes}
+
+
+def test_root_tree_source_accepts_stream_type() -> None:
+    assert (
+        run_root_tree_source(
+            datasets=[],
+            tree="events",
+            stream_type="event_stream",
+        )
+        == {}
+    )
