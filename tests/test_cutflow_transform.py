@@ -39,9 +39,11 @@ def test_cutflow_transform_preserves_full_selection_stats() -> None:
         "label": "nMuon >= 2",
         "expr": "nMuon >= 2",
         "kind": "expression",
-        "n": 2,
-        "n_in": 3,
-        "n_out": 2,
+        "n_unweighted_in": 3,
+        "n_unweighted_out": 2,
+        "n": 4.0,
+        "n_in": 6.0,
+        "n_out": 4.0,
         "sumw": 4.0,
         "sumw2": 10.0,
         "sumw_in": 6.0,
@@ -51,8 +53,10 @@ def test_cutflow_transform_preserves_full_selection_stats() -> None:
     }
     assert cuts[1]["label"] == "any(Muon_Pt > 25)"
     assert cuts[1]["expr"] == {"reduce": {"op": "any", "over": "Muon_Pt > 25"}}
-    assert cuts[1]["n_in"] == 2
-    assert cuts[1]["n_out"] == 2
+    assert cuts[1]["n_unweighted_in"] == 2
+    assert cuts[1]["n_unweighted_out"] == 2
+    assert cuts[1]["n_in"] == 4.0
+    assert cuts[1]["n_out"] == 4.0
 
 
 def test_cutflow_transform_supports_branched_selection_groups() -> None:
@@ -79,7 +83,10 @@ def test_cutflow_transform_supports_branched_selection_groups() -> None:
         str(row["name"]): row for row in out["cutflow"]["cuts"]
     }
     assert cuts_by_name["preselection[0]"]["n_out"] == 2
+    assert cuts_by_name["preselection[0]"]["n_unweighted_out"] == 2
     assert cuts_by_name["signal[0]"]["n_in"] == 2
     assert cuts_by_name["signal[0]"]["n_out"] == 1
+    assert cuts_by_name["signal[0]"]["n_unweighted_in"] == 2
+    assert cuts_by_name["signal[0]"]["n_unweighted_out"] == 1
     assert cuts_by_name["control[0]"]["n_in"] == 2
     assert cuts_by_name["control[0]"]["n_out"] == 1

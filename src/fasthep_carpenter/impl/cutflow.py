@@ -151,8 +151,8 @@ def _cut_row(
     after: Any,
     weights: Any,
 ) -> dict[str, Any]:
-    n_in = int(ak.sum(before))
-    n_out = int(ak.sum(after))
+    n_unweighted_in = int(ak.sum(before))
+    n_unweighted_out = int(ak.sum(after))
     row = {
         "name": node_id,
         "selection": selection_name,
@@ -160,19 +160,21 @@ def _cut_row(
         "label": _cut_label(step),
         "expr": _cut_expr(step),
         "kind": _cut_kind(step),
-        "n": n_out,
-        "n_in": n_in,
-        "n_out": n_out,
+        "n_unweighted_in": n_unweighted_in,
+        "n_unweighted_out": n_unweighted_out,
     }
     if weights is None:
         row.update(
             {
-                "sumw": float(n_out),
-                "sumw2": float(n_out),
-                "sumw_in": float(n_in),
-                "sumw_out": float(n_out),
-                "sumw2_in": float(n_in),
-                "sumw2_out": float(n_out),
+                "n": float(n_unweighted_out),
+                "n_in": float(n_unweighted_in),
+                "n_out": float(n_unweighted_out),
+                "sumw": float(n_unweighted_out),
+                "sumw2": float(n_unweighted_out),
+                "sumw_in": float(n_unweighted_in),
+                "sumw_out": float(n_unweighted_out),
+                "sumw2_in": float(n_unweighted_in),
+                "sumw2_out": float(n_unweighted_out),
             }
         )
         return row
@@ -183,6 +185,9 @@ def _cut_row(
     sumw2_out = float(ak.sum(weights[after] * weights[after]))
     row.update(
         {
+            "n": sumw_out,
+            "n_in": sumw_in,
+            "n_out": sumw_out,
             "sumw": sumw_out,
             "sumw2": sumw2_out,
             "sumw_in": sumw_in,
