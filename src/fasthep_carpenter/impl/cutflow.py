@@ -37,40 +37,23 @@ def run_cutflow(
     else:
         w = None
 
-    steps = params.get("selection", {}).get("All", [])
-    current = ak.Array(np.ones(len(events), dtype=np.bool_))
+    selection = params.get("selection", {})
+    initial_mask = ak.Array(np.ones(len(events), dtype=np.bool_))
+    masks_by_node: dict[str, Any] = {}
 
     cuts = []
-    for i, step in enumerate(steps):
-        if isinstance(step, dict) and "expr" in step:
-            m = eval_expr(events, str(step["expr"]), ctx)
-        elif isinstance(step, dict) and "reduce" in step:
-            red = step["reduce"]
-            op = red.get("op")
-            over = str(red.get("over"))
-            arr = eval_expr(events, over, ctx)
-            if op == "any":
-                m = ak.any(arr, axis=1)
-            elif op == "all":
-                m = ak.all(arr, axis=1)
-            else:
-                raise ValueError(f"Unsupported reduce op in selection: {op}")
-        elif isinstance(step, str):
-            m = eval_expr(events, step, ctx)
-        else:
-            raise ValueError(f"Bad selection step: {step}")
+    final_mask = initial_mask
+    for selection_name, steps, parents in _selection_groups(selection):
+        current = _base_mask(initial_mask, parents, masks_by_node)
+        for i, step in enumerate(steps):
+            before = current
+            current = current & _step_mask(events, step, ctx)
+            node_id = f"{selection_name}[{i}]"
+            masks_by_node[node_id] = current
+            cuts.append(_cut_row(node_id, selection_name, i, step, before, current, w))
+        final_mask = current
 
-        current = current & m
-
-        n = int(ak.sum(current))
-        row = {"name": f"All[{i}]", "n": n}
-        if w is not None:
-            sw = float(ak.sum(w[current]))
-            sw2 = float(ak.sum(w[current] * w[current]))
-            row.update({"sumw": sw, "sumw2": sw2})
-        cuts.append(row)
-
-    filtered = events[current]
+    filtered = events[final_mask]
     return {DEFAULT_PRIMARY_STREAM_ID: filtered, "cutflow": {"cuts": cuts}}
 
 
@@ -96,3 +79,147 @@ def run_cutflow_transform(*, stream, selection, weight_expr=None, ctx=None, **kw
         "stream": out[DEFAULT_PRIMARY_STREAM_ID],
         "cutflow": out["cutflow"],
     }
+
+
+def _selection_groups(selection: Any) -> list[tuple[str, list[Any], list[str]]]:
+    if not isinstance(selection, dict):
+        return []
+    groups: list[tuple[str, list[Any], list[str]]] = []
+    for name, raw in selection.items():
+        if isinstance(raw, list):
+            groups.append((str(name), raw, []))
+            continue
+        if not isinstance(raw, dict):
+            continue
+        steps = raw.get("steps", raw.get("cuts", []))
+        if not isinstance(steps, list):
+            continue
+        parent_value = raw.get("parents", raw.get("from", raw.get("parent", [])))
+        groups.append((str(name), steps, _parent_ids(parent_value)))
+    return groups
+
+
+def _parent_ids(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [value] if value else []
+    if isinstance(value, list | tuple):
+        return [str(item) for item in value if str(item)]
+    return [str(value)]
+
+
+def _base_mask(
+    initial_mask: Any,
+    parents: list[str],
+    masks_by_node: dict[str, Any],
+) -> Any:
+    if not parents:
+        return initial_mask
+    mask = initial_mask
+    for parent in parents:
+        if parent not in masks_by_node:
+            raise ValueError(f"Unknown parent selection node: {parent}")
+        mask = mask & masks_by_node[parent]
+    return mask
+
+
+def _step_mask(events: Any, step: Any, ctx: dict[str, Any]) -> Any:
+    if isinstance(step, dict) and "expr" in step:
+        return eval_expr(events, str(step["expr"]), ctx)
+    if isinstance(step, dict) and "reduce" in step:
+        red = step["reduce"]
+        op = red.get("op")
+        over = str(red.get("over"))
+        arr = eval_expr(events, over, ctx)
+        if op == "any":
+            return ak.any(arr, axis=1)
+        if op == "all":
+            return ak.all(arr, axis=1)
+        raise ValueError(f"Unsupported reduce op in selection: {op}")
+    if isinstance(step, str):
+        return eval_expr(events, step, ctx)
+    raise ValueError(f"Bad selection step: {step}")
+
+
+def _cut_row(
+    node_id: str,
+    selection_name: str,
+    index: int,
+    step: Any,
+    before: Any,
+    after: Any,
+    weights: Any,
+) -> dict[str, Any]:
+    n_in = int(ak.sum(before))
+    n_out = int(ak.sum(after))
+    row = {
+        "name": node_id,
+        "selection": selection_name,
+        "index": index,
+        "label": _cut_label(step),
+        "expr": _cut_expr(step),
+        "kind": _cut_kind(step),
+        "n": n_out,
+        "n_in": n_in,
+        "n_out": n_out,
+    }
+    if weights is None:
+        row.update(
+            {
+                "sumw": float(n_out),
+                "sumw2": float(n_out),
+                "sumw_in": float(n_in),
+                "sumw_out": float(n_out),
+                "sumw2_in": float(n_in),
+                "sumw2_out": float(n_out),
+            }
+        )
+        return row
+
+    sumw_in = float(ak.sum(weights[before]))
+    sumw_out = float(ak.sum(weights[after]))
+    sumw2_in = float(ak.sum(weights[before] * weights[before]))
+    sumw2_out = float(ak.sum(weights[after] * weights[after]))
+    row.update(
+        {
+            "sumw": sumw_out,
+            "sumw2": sumw2_out,
+            "sumw_in": sumw_in,
+            "sumw_out": sumw_out,
+            "sumw2_in": sumw2_in,
+            "sumw2_out": sumw2_out,
+        }
+    )
+    return row
+
+
+def _cut_label(step: Any) -> str:
+    if isinstance(step, str):
+        return step
+    if isinstance(step, dict):
+        if isinstance(step.get("label"), str):
+            return step["label"]
+        if "expr" in step:
+            return str(step["expr"])
+        if isinstance(step.get("reduce"), dict):
+            reduce_spec = step["reduce"]
+            return f"{reduce_spec.get('op', 'reduce')}({reduce_spec.get('over', '')})"
+    return str(step)
+
+
+def _cut_expr(step: Any) -> Any:
+    if isinstance(step, str):
+        return step
+    if isinstance(step, dict):
+        if "expr" in step:
+            return step["expr"]
+        if "reduce" in step:
+            return {"reduce": step["reduce"]}
+    return step
+
+
+def _cut_kind(step: Any) -> str:
+    if isinstance(step, dict) and "reduce" in step:
+        return "reduce"
+    return "expression"
