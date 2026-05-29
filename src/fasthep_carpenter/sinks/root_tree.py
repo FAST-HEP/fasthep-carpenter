@@ -7,6 +7,35 @@ import awkward as ak
 import uproot
 from hepflow.model.io import OutputResult
 
+ROOT_TREE_WRITE_SPEC = {
+    "name": "root_tree",
+    "kind": "writer",
+    "version": "1.0",
+    "input": {"name": "target", "kind": "event_stream", "required": True},
+    "params": {
+        "path": {"type": "string", "required": True},
+        "tree": {"type": "string", "required": False, "default": "events"},
+        "keep": {"type": "list[string]", "required": False, "default": None},
+        "compression": {
+            "type": "string",
+            "required": False,
+            "default": "zlib",
+            "allowed": ["zlib", "lz4", "zstd", "none"],
+        },
+        "compression_level": {"type": "integer", "required": False, "default": 1},
+        "mode": {
+            "type": "string",
+            "required": False,
+            "default": "recreate",
+            "allowed": ["recreate"],
+        },
+    },
+    "result": {
+        "kind": "artifact",
+        "description": "A written ROOT file containing a TTree.",
+    },
+}
+
 
 def run_root_tree_write(
     target: Any,

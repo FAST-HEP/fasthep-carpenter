@@ -4,13 +4,72 @@ from typing import Any
 
 import awkward as ak
 import numpy as np
+from hepflow.compiler.expr_symbols import data_symbols_in_expr
+from hepflow.model.data_flow import DataDependencyResult
 from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 from hepflow.runtime.engine import eval_expr
 
-from fasthep_carpenter.impl.compat import (
+from fasthep_carpenter.runtime.compat import (
     legacy_data_envelope,
     unwrap_legacy_data_envelope,
 )
+
+CUTFLOW_SPEC = {
+    "name": "hep.selection.cutflow",
+    "kind": "transform",
+    "version": "1.0",
+    "dependencies": {
+        "parser": "fasthep_carpenter.operations.cutflow:parse_cutflow_column_dependencies",
+    },
+    "input": {"name": "stream", "kind": "event_stream", "required": True},
+    "params": {
+        "selection": {"type": "mapping", "required": True},
+        "weight_expr": {"type": "string", "required": False},
+    },
+    "result": {
+        "stream": {"kind": "event_stream", "description": "Filtered event stream."},
+        "cutflow": {"kind": "cutflow", "description": "Cutflow product."},
+    },
+}
+
+
+def parse_cutflow_column_dependencies(
+    params: dict[str, Any],
+    *,
+    known_functions: set[str],
+    known_constants: set[str],
+    context_symbols: set[str],
+) -> DataDependencyResult:
+    result = DataDependencyResult()
+
+    def add_expr(expr: Any) -> None:
+        if expr is None:
+            return
+        result.consumes.update(
+            data_symbols_in_expr(
+                str(expr),
+                known_functions=known_functions,
+                known_constants=known_constants,
+                context_symbols=context_symbols,
+                produced=set(),
+            )
+        )
+
+    selection = params.get("selection") or {}
+    if isinstance(selection, dict):
+        for _, steps, _ in _selection_groups(selection):
+            for step in steps:
+                if isinstance(step, str):
+                    add_expr(step)
+                elif isinstance(step, dict):
+                    add_expr(step.get("expr"))
+                    reduce_spec = step.get("reduce")
+                    if isinstance(reduce_spec, dict):
+                        add_expr(reduce_spec.get("over"))
+
+    add_expr(params.get("weight_expr"))
+    add_expr(params.get("weight"))
+    return result
 
 
 def run_cutflow(

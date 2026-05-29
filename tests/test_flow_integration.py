@@ -5,7 +5,7 @@ from pathlib import Path
 import yaml
 from hepflow.api import compile_author_file
 
-from fasthep_carpenter.impl.read.root_tree import run_root_tree_source
+from fasthep_carpenter.sources.root_tree import run_root_tree_source
 
 
 def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path) -> None:
@@ -51,10 +51,10 @@ def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path
     plan = compile_author_file(author_path, outdir=tmp_path / "build")
 
     assert plan.registry["sources"]["root_tree"]["impl"] == (
-        "fasthep_carpenter.impl.read.root_tree:run_root_tree_source"
+        "fasthep_carpenter.sources.root_tree:run_root_tree_source"
     )
     assert plan.registry["transforms"]["hep.define"]["impl"] == (
-        "fasthep_carpenter.impl.define:run_define_transform"
+        "fasthep_carpenter.operations.define:run_define_transform"
     )
     assert "read.events" in {node.id for node in plan.nodes}
 

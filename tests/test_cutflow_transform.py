@@ -5,7 +5,7 @@ from typing import Any
 import awkward as ak
 from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 
-from fasthep_carpenter.impl.cutflow import run_cutflow
+from fasthep_carpenter.operations.cutflow import run_cutflow
 
 
 def test_cutflow_transform_preserves_full_selection_stats() -> None:

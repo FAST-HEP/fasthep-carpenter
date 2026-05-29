@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.resources as resources
 
+import yaml
 from hepflow.registry.loaders import load_object
 
 import fasthep_carpenter
@@ -19,14 +20,30 @@ def test_load_registry_profile_resource() -> None:
     )
 
     assert "root_tree" in text
-    assert "fasthep_carpenter.impl.read.root_tree:run_root_tree_source" in text
+    assert "fasthep_carpenter.sources.root_tree:run_root_tree_source" in text
 
 
 def test_load_one_spec_and_impl_object() -> None:
-    spec = load_object(
-        "fasthep_carpenter.spec.define_transform:DEFINE_TRANSFORM_SPEC"
-    )
-    impl = load_object("fasthep_carpenter.impl.define:run_define_transform")
+    spec = load_object("fasthep_carpenter.operations.define:DEFINE_SPEC")
+    impl = load_object("fasthep_carpenter.operations.define:run_define_transform")
 
     assert spec["name"] == "hep.define"
     assert callable(impl)
+
+
+def test_registry_objects_resolve_from_new_layout() -> None:
+    text = (
+        resources.files("fasthep_carpenter.profiles")
+        .joinpath("registry.yaml")
+        .read_text(encoding="utf-8")
+    )
+    registry = yaml.safe_load(text)["registry"]
+
+    for section in ("sources", "transforms", "sinks"):
+        for entry in registry[section].values():
+            assert load_object(entry["spec"]) is not None
+            assert callable(load_object(entry["impl"]))
+
+    for entry in registry["product_handlers"].values():
+        assert callable(load_object(entry["merge"]))
+        assert callable(load_object(entry["materialize"]))

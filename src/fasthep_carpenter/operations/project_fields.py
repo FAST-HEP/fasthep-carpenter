@@ -3,7 +3,47 @@ from __future__ import annotations
 from typing import Any
 
 import awkward as ak
+from hepflow.model.data_flow import DataDependencyResult
 from hepflow.runtime.records import get_field_by_branch
+
+PROJECT_FIELDS_SPEC = {
+    "name": "core.project_fields",
+    "kind": "transform",
+    "version": "1.0",
+    "dependencies": {
+        "parser": "fasthep_carpenter.operations.project_fields:parse_project_fields_column_dependencies",
+    },
+    "input": {"name": "stream", "kind": "event_stream", "required": True},
+    "params": {
+        "stream_id": {"type": "string", "required": True},
+        "aliases": {"type": "mapping", "required": True},
+    },
+    "result": {
+        "kind": "event_stream",
+        "description": "Stream with projected alias fields added.",
+    },
+}
+
+
+def parse_project_fields_column_dependencies(
+    params: dict[str, Any],
+    *,
+    context_symbols: set[str] | None = None,
+    **_: Any,
+) -> DataDependencyResult:
+    del context_symbols
+    result = DataDependencyResult()
+    aliases = params.get("aliases") or {}
+    if not isinstance(aliases, dict):
+        return result
+
+    for alias, branch in aliases.items():
+        if isinstance(alias, str) and alias:
+            result.produces.add(alias)
+        if isinstance(branch, str) and branch:
+            result.consumes.add(branch)
+
+    return result
 
 
 def run_project_fields(
@@ -25,6 +65,7 @@ def run_project_fields(
     aliases:
         Mapping of alias name -> physical branch path
     """
+    del ctx
     stream = _normalise_stream(stream)
 
     if not aliases:

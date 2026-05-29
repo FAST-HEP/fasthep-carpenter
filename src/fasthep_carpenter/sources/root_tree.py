@@ -6,6 +6,30 @@ from typing import Any
 import awkward as ak
 import uproot
 
+ROOT_TREE_SOURCE_SPEC = {
+    "name": "root_tree",
+    "kind": "source",
+    "version": "1.0",
+    "input": None,
+    "params": {
+        "datasets": {"type": "list[mapping]", "required": True},
+        "defaults": {"type": "mapping", "required": False, "default": {}},
+        "tree": {"type": "string", "required": True},
+        "stream_type": {
+            "type": "string",
+            "required": False,
+            "default": "event_stream",
+        },
+        "branches": {"type": "list[string]", "required": False, "default": None},
+        "start": {"type": "integer", "required": False, "default": None},
+        "stop": {"type": "integer", "required": False, "default": None},
+    },
+    "result": {
+        "kind": "event_stream",
+        "description": "Loaded ROOT tree event stream.",
+    },
+}
+
 
 def run_root_tree_source(
     *,
@@ -24,6 +48,7 @@ def run_root_tree_source(
     Current representation:
       {dataset_name: awkward.Array}
     """
+    del stream_type
     defaults = dict(defaults or {})
     ctx = dict(ctx or {})
     partition = ctx.get("partition")

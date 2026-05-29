@@ -1,17 +1,17 @@
 from __future__ import annotations
 
-from fasthep_carpenter.spec.cms.match_l1t_jets_transform import (
+from fasthep_carpenter.operations.cms.match_l1t_jets import (
     MATCH_L1T_JETS_OUTPUTS,
     parse_match_l1t_jets_data_dependencies,
 )
-from fasthep_carpenter.spec.cutflow_transform import (
+from fasthep_carpenter.operations.cutflow import (
     parse_cutflow_column_dependencies,
 )
-from fasthep_carpenter.spec.define_transform import parse_define_column_dependencies
-from fasthep_carpenter.spec.di_object_mass_transform import (
+from fasthep_carpenter.operations.define import parse_define_column_dependencies
+from fasthep_carpenter.operations.di_object_mass import (
     parse_di_object_mass_data_dependencies,
 )
-from fasthep_carpenter.spec.hist_transform import parse_hist_column_dependencies
+from fasthep_carpenter.operations.hist import parse_hist_column_dependencies
 
 
 def test_define_data_dependencies() -> None:
