@@ -38,6 +38,15 @@ registry:
       spec: fasthep_carpenter.spec.write.root_tree:ROOT_TREE_WRITE_SPEC
       impl: fasthep_carpenter.impl.write.root_tree:run_root_tree_write
 
+  product_handlers:
+    histogram:
+      merge: fasthep_carpenter.products:merge_histogram_products
+      materialize: fasthep_carpenter.products:materialize_histogram_product
+
+    cutflow:
+      merge: fasthep_carpenter.products:merge_cutflow_products
+      materialize: fasthep_carpenter.products:materialize_cutflow_product
+
   functions:
     sqrt: numpy:sqrt
     abs: numpy:abs
