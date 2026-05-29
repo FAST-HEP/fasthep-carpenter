@@ -54,7 +54,17 @@ def merge_cutflow_products(
     output_name: str,
     dataset_name: str | None = None,
 ) -> dict[str, Any]:
-    del node, output_name
+    del output_name
+    if _all_canonical_cutflows(values):
+        return _merge_canonical_cutflows(values, producer_id=node.id)
+
+    if dataset_name is None and any("dataset" in value for value in values):
+        return canonical_cutflow_graph(
+            producer_id=node.id,
+            params=dict(node.params or {}),
+            product={"cutflows": values},
+        )
+
     out_by_name: dict[str, dict[str, Any]] = {}
     for cutflow in values:
         for row in cutflow.get("cuts", []):
@@ -78,6 +88,103 @@ def merge_cutflow_products(
     if dataset_name is not None:
         merged["dataset"] = dataset_name
     return merged
+
+
+def _all_canonical_cutflows(values: list[dict[str, Any]]) -> bool:
+    return bool(values) and all(
+        isinstance(value, dict)
+        and value.get("kind") == "cutflow"
+        and isinstance(value.get("nodes"), list)
+        for value in values
+    )
+
+
+def _merge_canonical_cutflows(
+    values: list[dict[str, Any]],
+    *,
+    producer_id: str,
+) -> dict[str, Any]:
+    first = values[0]
+    nodes_by_id: dict[str, dict[str, Any]] = {}
+    datasets: set[str] = set()
+
+    for cutflow in values:
+        for dataset in _canonical_datasets(cutflow):
+            datasets.add(dataset)
+        for node in cutflow.get("nodes", []):
+            if not isinstance(node, dict):
+                continue
+            node_id = str(node.get("id") or "")
+            if not node_id:
+                continue
+            target = nodes_by_id.setdefault(node_id, _node_without_stats(node))
+            target_stats = target.setdefault("stats", {})
+            stats_by_dataset = node.get("stats") or {}
+            if not isinstance(stats_by_dataset, dict):
+                continue
+            for dataset, stats in stats_by_dataset.items():
+                if not isinstance(stats, dict):
+                    continue
+                dataset_name = str(dataset)
+                datasets.add(dataset_name)
+                target_stats[dataset_name] = _add_stats(
+                    target_stats.get(dataset_name, {}),
+                    stats,
+                )
+
+    ordered_node_ids = [
+        str(node.get("id"))
+        for node in first.get("nodes", [])
+        if isinstance(node, dict) and node.get("id") in nodes_by_id
+    ]
+    for node_id in sorted(set(nodes_by_id) - set(ordered_node_ids)):
+        ordered_node_ids.append(node_id)
+
+    return {
+        "version": str(first.get("version") or "1.0"),
+        "kind": "cutflow",
+        "producer": str(first.get("producer") or producer_id),
+        "datasets": sorted(datasets) if datasets else ["default"],
+        "nodes": [nodes_by_id[node_id] for node_id in ordered_node_ids],
+        "edges": _json_safe(first.get("edges") or []),
+    }
+
+
+def _canonical_datasets(cutflow: dict[str, Any]) -> list[str]:
+    datasets = cutflow.get("datasets")
+    if isinstance(datasets, list) and datasets:
+        return [str(dataset) for dataset in datasets]
+    found: set[str] = set()
+    for node in cutflow.get("nodes", []):
+        if not isinstance(node, dict):
+            continue
+        stats = node.get("stats")
+        if isinstance(stats, dict):
+            found.update(str(dataset) for dataset in stats)
+    return sorted(found)
+
+
+def _node_without_stats(node: dict[str, Any]) -> dict[str, Any]:
+    copied = {str(key): _json_safe(value) for key, value in node.items() if key != "stats"}
+    copied["stats"] = {}
+    return copied
+
+
+def _add_stats(left: dict[str, Any], right: dict[str, Any]) -> dict[str, Any]:
+    left_stats = _selection_stats(left)
+    right_stats = _selection_stats(right)
+    return {
+        "n_in": left_stats["n_in"] + right_stats["n_in"],
+        "n_out": left_stats["n_out"] + right_stats["n_out"],
+        "n_unweighted_in": left_stats["n_unweighted_in"]
+        + right_stats["n_unweighted_in"],
+        "n_unweighted_out": left_stats["n_unweighted_out"]
+        + right_stats["n_unweighted_out"],
+        "sumw_in": left_stats["sumw_in"] + right_stats["sumw_in"],
+        "sumw_out": left_stats["sumw_out"] + right_stats["sumw_out"],
+        "sumw2_in": left_stats["sumw2_in"] + right_stats["sumw2_in"],
+        "sumw2_out": left_stats["sumw2_out"] + right_stats["sumw2_out"],
+    }
 
 
 def materialize_cutflow_product(
