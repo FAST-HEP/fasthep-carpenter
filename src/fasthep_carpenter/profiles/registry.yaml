@@ -29,6 +29,14 @@ registry:
       spec: fasthep_carpenter.operations.di_object_mass:DI_OBJECT_MASS_SPEC
       impl: fasthep_carpenter.operations.di_object_mass:run_di_object_mass_transform
 
+    hep.weights.lookup_csv:
+      spec: fasthep_carpenter.operations.weights.lookup_csv:LOOKUP_CSV_SPEC
+      impl: fasthep_carpenter.operations.weights.lookup_csv:run_lookup_csv_transform
+
+    hep.weights.pdf_envelope:
+      spec: fasthep_carpenter.operations.weights.pdf_envelope:PDF_ENVELOPE_SPEC
+      impl: fasthep_carpenter.operations.weights.pdf_envelope:run_pdf_envelope_transform
+
     cms.match_l1t_jets:
       spec: fasthep_carpenter.operations.cms.match_l1t_jets:CMS_MATCH_L1T_JETS_SPEC
       impl: fasthep_carpenter.operations.cms.match_l1t_jets:run_match_l1t_jets_transform
