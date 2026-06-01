@@ -31,12 +31,17 @@ def materialize_histogram_product(
     node: Any,
     output_name: str,
     outdir: str | Path,
+    variation: str | None = None,
 ) -> dict[str, Any]:
     del output_name
-    histograms_dir = artifact_family_dir(outdir, "histograms")
+    histograms_dir = artifact_family_dir(outdir, "histograms", variation=variation)
     histograms_dir.mkdir(parents=True, exist_ok=True)
     histogram_id = product_id(node)
-    relative_path = Path("artifacts") / "histograms" / f"{histogram_id}.pkl"
+    relative_path = _artifact_relative_path(
+        "histograms",
+        f"{histogram_id}.pkl",
+        variation=variation,
+    )
     write_pickle(value, Path(outdir) / relative_path)
     item = {
         "id": histogram_id,
@@ -193,12 +198,17 @@ def materialize_cutflow_product(
     node: Any,
     output_name: str,
     outdir: str | Path,
+    variation: str | None = None,
 ) -> dict[str, Any]:
     del output_name
-    cutflows_dir = artifact_family_dir(outdir, "cutflows")
+    cutflows_dir = artifact_family_dir(outdir, "cutflows", variation=variation)
     cutflows_dir.mkdir(parents=True, exist_ok=True)
     cutflow_id = product_id(node)
-    relative_path = Path("artifacts") / "cutflows" / f"{cutflow_id}.json"
+    relative_path = _artifact_relative_path(
+        "cutflows",
+        f"{cutflow_id}.json",
+        variation=variation,
+    )
     graph = canonical_cutflow_graph(
         producer_id=node.id,
         params=dict(node.params or {}),
@@ -212,6 +222,18 @@ def materialize_cutflow_product(
     }
     _update_manifest(cutflows_dir, "cutflows", item)
     return {"value": graph, "items": [item]}
+
+
+def _artifact_relative_path(
+    family: str,
+    filename: str,
+    *,
+    variation: str | None,
+) -> Path:
+    path = Path("artifacts")
+    if variation:
+        path = path / variation
+    return path / family / filename
 
 
 def canonical_cutflow_graph(
