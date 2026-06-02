@@ -5,7 +5,7 @@ import re
 from pathlib import Path
 from typing import Any
 
-from hepflow.build_layout import artifact_family_dir
+from hepflow.build_layout import BuildPaths
 from hepflow.runtime.materialize import product_id
 from hepflow.utils import write_json, write_pickle
 
@@ -31,18 +31,16 @@ def materialize_histogram_product(
     node: Any,
     output_name: str,
     outdir: str | Path,
-    variation: str | None = None,
+    build_paths: BuildPaths | None = None,
 ) -> dict[str, Any]:
     del output_name
-    histograms_dir = artifact_family_dir(outdir, "histograms", variation=variation)
+    paths = build_paths or BuildPaths(root=Path(outdir))
+    histograms_dir = paths.artifact_dir("histograms")
     histograms_dir.mkdir(parents=True, exist_ok=True)
     histogram_id = product_id(node)
-    relative_path = _artifact_relative_path(
-        "histograms",
-        f"{histogram_id}.pkl",
-        variation=variation,
-    )
-    write_pickle(value, Path(outdir) / relative_path)
+    product_path = paths.artifact("histograms", f"{histogram_id}.pkl")
+    relative_path = paths.relative_to_root(product_path)
+    write_pickle(value, product_path)
     item = {
         "id": histogram_id,
         "path": relative_path.as_posix(),
@@ -198,23 +196,21 @@ def materialize_cutflow_product(
     node: Any,
     output_name: str,
     outdir: str | Path,
-    variation: str | None = None,
+    build_paths: BuildPaths | None = None,
 ) -> dict[str, Any]:
     del output_name
-    cutflows_dir = artifact_family_dir(outdir, "cutflows", variation=variation)
+    paths = build_paths or BuildPaths(root=Path(outdir))
+    cutflows_dir = paths.artifact_dir("cutflows")
     cutflows_dir.mkdir(parents=True, exist_ok=True)
     cutflow_id = product_id(node)
-    relative_path = _artifact_relative_path(
-        "cutflows",
-        f"{cutflow_id}.json",
-        variation=variation,
-    )
+    product_path = paths.artifact("cutflows", f"{cutflow_id}.json")
+    relative_path = paths.relative_to_root(product_path)
     graph = canonical_cutflow_graph(
         producer_id=node.id,
         params=dict(node.params or {}),
         product=value,
     )
-    write_json(graph, Path(outdir) / relative_path)
+    write_json(graph, product_path)
     item = {
         "id": cutflow_id,
         "path": relative_path.as_posix(),
@@ -222,18 +218,6 @@ def materialize_cutflow_product(
     }
     _update_manifest(cutflows_dir, "cutflows", item)
     return {"value": graph, "items": [item]}
-
-
-def _artifact_relative_path(
-    family: str,
-    filename: str,
-    *,
-    variation: str | None,
-) -> Path:
-    path = Path("artifacts")
-    if variation:
-        path = path / variation
-    return path / family / filename
 
 
 def canonical_cutflow_graph(
