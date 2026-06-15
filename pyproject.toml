@@ -32,6 +32,9 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+gpu = [
+    "cupy",
+]
 test = [
     "pytest",
 ]

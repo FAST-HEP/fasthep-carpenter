@@ -46,6 +46,10 @@ registry:
       spec: fasthep_carpenter.sinks.root_tree:ROOT_TREE_WRITE_SPEC
       impl: fasthep_carpenter.sinks.root_tree:run_root_tree_write
 
+  execution_modifiers:
+    gpu.preload:
+      impl: fasthep_carpenter.runtime.modifiers.gpu_preload:GPUPreloadModifier
+
   product_handlers:
     histogram:
       merge: fasthep_carpenter.products:merge_histogram_products

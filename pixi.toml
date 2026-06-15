@@ -26,6 +26,7 @@ deptry = ">=0.25.1, <0.26"
 py311 = ["py311"]
 py313 = ["py313"]
 py314 = ["py314"]
+gpu = ["gpu"]
 docs = ["docs"]
 
 [feature.py311.dependencies]
@@ -36,6 +37,10 @@ python = "3.13.*"
 
 [feature.py314.dependencies]
 python = "3.14.*"
+
+[feature.gpu.dependencies]
+cupy = "*"
+cuda-version = "12.6.*"
 
 [feature.docs.dependencies]
 python = ">=3.11"
