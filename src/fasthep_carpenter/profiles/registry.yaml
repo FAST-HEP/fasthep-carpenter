@@ -49,6 +49,8 @@ registry:
   execution_modifiers:
     gpu.preload:
       impl: fasthep_carpenter.runtime.modifiers.gpu_preload:GPUPreloadModifier
+    cuda.jit:
+      impl: fasthep_carpenter.runtime.modifiers.cuda_jit:CUDAJitModifier
 
   product_handlers:
     histogram:
