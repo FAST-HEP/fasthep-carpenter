@@ -14,7 +14,9 @@ class CUDAJitModifier:
     This is intentionally narrow: it only looks up named callables from
     ``ctx["cuda_jit_functions"]`` and stores compiled versions in
     ``ctx["cuda_jit_compiled"]``. It does not automatically accelerate arbitrary
-    FAST-HEP stages or inject kernels into operation internals.
+    FAST-HEP stages, derive kernels from plan nodes, or inject kernels into
+    operation internals. Compilation is cached per runtime context, which maps
+    naturally to one worker process in distributed execution.
     """
 
     def __init__(
@@ -53,29 +55,48 @@ class CUDAJitModifier:
         if not isinstance(compiled_functions, dict):
             raise ValueError("cuda.jit expected ctx['cuda_jit_compiled'] to be a dict")
 
+        cache = ctx.setdefault("cuda_jit_cache", {})
+        if not isinstance(cache, dict):
+            raise ValueError("cuda.jit expected ctx['cuda_jit_cache'] to be a dict")
+
         compiled_names: list[str] = []
+        cache_hits: list[str] = []
+        cache_misses: list[str] = []
+        node_id = str(node.id)
         for name in self.functions:
-            func = available_functions.get(name)
-            if func is None:
+            if name not in available_functions:
                 raise KeyError(
                     f"cuda.jit missing function {name!r} in "
                     f"ctx['cuda_jit_functions'] for node {node.id}"
                 )
+            func = available_functions[name]
             if not callable(func):
                 raise TypeError(f"cuda.jit function {name!r} is not callable")
-            compiled_functions[name] = _compile_function(
-                cuda,
-                name=name,
-                node_id=str(node.id),
-                func=func,
-            )
+
+            key = _cache_key(node_id=node_id, name=name)
+            if key in cache:
+                compiled = cache[key]
+                cache_hits.append(name)
+            else:
+                compiled = _compile_function(
+                    cuda,
+                    name=name,
+                    node_id=node_id,
+                    func=func,
+                )
+                cache[key] = compiled
+                cache_misses.append(name)
+
+            compiled_functions[name] = compiled
             compiled_names.append(name)
 
         _record_metadata(
             ctx,
-            node_id=str(node.id),
+            node_id=node_id,
             functions=compiled_names,
-            compiled_count=len(compiled_names),
+            compiled_count=len(cache_misses),
+            cache_hits=cache_hits,
+            cache_misses=cache_misses,
         )
 
 
@@ -142,12 +163,18 @@ def _compile_function(
         ) from exc
 
 
+def _cache_key(*, node_id: str, name: str) -> tuple[str, str, str]:
+    return ("numba.cuda", node_id, name)
+
+
 def _record_metadata(
     ctx: dict[str, Any],
     *,
     node_id: str,
     functions: list[str],
     compiled_count: int,
+    cache_hits: list[str],
+    cache_misses: list[str],
 ) -> None:
     metadata = ctx.setdefault("execution_modifier_metadata", {})
     if not isinstance(metadata, dict):
@@ -160,5 +187,7 @@ def _record_metadata(
                 "functions": list(functions),
                 "backend": "numba.cuda",
                 "compiled_count": compiled_count,
+                "cache_hits": list(cache_hits),
+                "cache_misses": list(cache_misses),
             }
         )
