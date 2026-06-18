@@ -1,11 +1,16 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
+import awkward as ak
 import yaml
 from hepflow.api import compile_author_file
 
-from fasthep_carpenter.sources.root_tree import run_root_tree_source
+from fasthep_carpenter.sources.root_tree import (
+    RootTreeSchema,
+    run_root_tree_source,
+)
 
 
 def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path) -> None:
@@ -68,3 +73,132 @@ def test_root_tree_source_accepts_stream_type() -> None:
         )
         == {}
     )
+
+
+def test_root_tree_source_allows_remote_root_uri(
+    monkeypatch,
+) -> None:
+    opened: list[Any] = []
+
+    class FakeTree:
+        def arrays(self, *args: Any, **kwargs: Any) -> dict[str, list[int]]:
+            return {"Muon_pt": [1, 2, 3]}
+
+    class FakeFile:
+        def __enter__(self) -> dict[str, FakeTree]:
+            return {"Events": FakeTree()}
+
+        def __exit__(self, *exc_info: object) -> None:
+            return None
+
+    def fake_open(path: Any) -> FakeFile:
+        opened.append(path)
+        return FakeFile()
+
+    monkeypatch.setattr("fasthep_carpenter.sources.root_tree.uproot.open", fake_open)
+
+    result = run_root_tree_source(
+        datasets=[
+            {
+                "name": "DoubleMuon",
+                "files": ["root://example.test//store/data.root"],
+            }
+        ],
+        tree="Events",
+    )
+
+    assert opened == ["root://example.test//store/data.root"]
+    assert "DoubleMuon" in result
+
+
+def test_root_tree_source_metadata_only_does_not_call_arrays(monkeypatch) -> None:
+    class FakeTree:
+        num_entries = 42
+
+        def keys(self) -> list[str]:
+            return ["Muon_pt", "Muon_eta"]
+
+        def typenames(self) -> dict[str, str]:
+            return {"Muon_pt": "float[]", "Muon_eta": "float[]"}
+
+        def interpretations(self) -> dict[str, str]:
+            return {
+                "Muon_pt": "AsJagged(AsDtype('>f4'))",
+                "Muon_eta": "AsJagged(AsDtype('>f4'))",
+            }
+
+        def arrays(self, *args: Any, **kwargs: Any) -> None:
+            raise AssertionError("metadata-only schema inspection must not call arrays()")
+
+    class FakeFile:
+        def __enter__(self) -> dict[str, FakeTree]:
+            return {"Events": FakeTree()}
+
+        def __exit__(self, *exc_info: object) -> None:
+            return None
+
+    monkeypatch.setattr(
+        "fasthep_carpenter.sources.root_tree.uproot.open",
+        lambda path: FakeFile(),
+    )
+
+    result = run_root_tree_source(
+        datasets=[],
+        tree="Events",
+        branches=["Muon_pt"],
+        start=0,
+        stop=10,
+        metadata_only=True,
+        ctx={
+            "partition": {
+                "file": "root://example.test//store/data.root",
+                "start": None,
+                "stop": None,
+            }
+        },
+    )
+
+    assert isinstance(result, RootTreeSchema)
+    assert result.fields == ["Muon_pt"]
+    assert result.awkward_type == {"Muon_pt": "float[]"}
+    assert result.entry_count == 10
+
+
+def test_root_tree_source_partition_null_range_keeps_source_range(monkeypatch) -> None:
+    calls: list[dict[str, Any]] = []
+
+    class FakeTree:
+        def arrays(self, *args: Any, **kwargs: Any) -> ak.Array:
+            calls.append(dict(kwargs))
+            return ak.Array({"Muon_pt": [1.0, 2.0]})
+
+    class FakeFile:
+        def __enter__(self) -> dict[str, FakeTree]:
+            return {"Events": FakeTree()}
+
+        def __exit__(self, *exc_info: object) -> None:
+            return None
+
+    monkeypatch.setattr(
+        "fasthep_carpenter.sources.root_tree.uproot.open",
+        lambda path: FakeFile(),
+    )
+
+    run_root_tree_source(
+        datasets=[],
+        tree="Events",
+        branches=["Muon_pt"],
+        start=0,
+        stop=1000,
+        ctx={
+            "partition": {
+                "file": "root://example.test//store/data.root",
+                "start": None,
+                "stop": None,
+            }
+        },
+    )
+
+    assert calls == [
+        {"entry_start": 0, "entry_stop": 1000, "library": "ak"},
+    ]

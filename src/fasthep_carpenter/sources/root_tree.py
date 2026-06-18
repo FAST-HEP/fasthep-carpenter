@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlparse
 
 import awkward as ak
 import uproot
@@ -23,12 +25,27 @@ ROOT_TREE_SOURCE_SPEC = {
         "branches": {"type": "list[string]", "required": False, "default": None},
         "start": {"type": "integer", "required": False, "default": None},
         "stop": {"type": "integer", "required": False, "default": None},
+        "metadata_only": {"type": "boolean", "required": False, "default": False},
     },
     "result": {
         "kind": "event_stream",
         "description": "Loaded ROOT tree event stream.",
     },
 }
+
+
+@dataclass(frozen=True, slots=True)
+class RootTreeSchema:
+    """Metadata-only ROOT tree schema descriptor.
+
+    This intentionally carries branch metadata without materialising event arrays.
+    Curator's schema observer consumes it via duck typing so Flow can inspect
+    remote ROOT schemas without forcing ``TTree.arrays()``.
+    """
+
+    fields: list[str]
+    awkward_type: dict[str, str]
+    entry_count: int | None = None
 
 
 def run_root_tree_source(
@@ -40,8 +57,9 @@ def run_root_tree_source(
     branches: list[str] | None = None,
     start: int | None = None,
     stop: int | None = None,
+    metadata_only: bool = False,
     ctx: dict[str, Any] | None = None,
-) -> ak.Array | dict[str, ak.Array]:
+) -> ak.Array | RootTreeSchema | dict[str, ak.Array | RootTreeSchema]:
     """
     Load ROOT TTrees for each dataset and return a dataset-keyed event stream.
 
@@ -54,15 +72,18 @@ def run_root_tree_source(
     partition = ctx.get("partition")
 
     if partition is not None:
+        partition_start = partition.get("start")
+        partition_stop = partition.get("stop")
         return _read_one_file(
             str(partition["file"]),
             tree=tree,
             branches=branches,
-            start=partition.get("start", start),
-            stop=partition.get("stop", stop),
+            start=start if partition_start is None else partition_start,
+            stop=stop if partition_stop is None else partition_stop,
+            metadata_only=metadata_only,
         )
 
-    out: dict[str, ak.Array] = {}
+    out: dict[str, ak.Array | RootTreeSchema] = {}
 
     for ds in datasets:
         name = str(ds["name"])
@@ -77,11 +98,15 @@ def run_root_tree_source(
                 branches=branches,
                 start=start,
                 stop=stop,
+                metadata_only=metadata_only,
             )
             for path in files
         ]
 
-        merged = arrays[0] if len(arrays) == 1 else ak.concatenate(arrays, axis=0)
+        if metadata_only:
+            merged = arrays[0]
+        else:
+            merged = arrays[0] if len(arrays) == 1 else ak.concatenate(arrays, axis=0)
 
         out[name] = merged
 
@@ -95,16 +120,20 @@ def _read_one_file(
     branches: list[str] | None,
     start: int | None,
     stop: int | None,
-) -> ak.Array:
+    metadata_only: bool = False,
+) -> ak.Array | RootTreeSchema:
     file_path = Path(path)
-    if not file_path.exists():
+    if not _is_remote_uri(path) and not file_path.exists():
         raise FileNotFoundError(f"ROOT input file does not exist: {path}")
 
-    with uproot.open(file_path) as fin:
+    with uproot.open(path if _is_remote_uri(path) else file_path) as fin:
         try:
             t = fin[tree]
         except KeyError as exc:
             raise KeyError(f"Tree '{tree}' not found in ROOT file: {path}") from exc
+
+        if metadata_only:
+            return _inspect_tree_schema(t, branches=branches, start=start, stop=stop)
 
         if not branches:
             return t.arrays(
@@ -144,6 +173,88 @@ def _read_one_file(
         return ak.zip(out, depth_limit=1)
 
 
+def _inspect_tree_schema(
+    tree: Any,
+    *,
+    branches: list[str] | None,
+    start: int | None,
+    stop: int | None,
+) -> RootTreeSchema:
+    fields = [str(field) for field in _tree_keys(tree)]
+    if branches:
+        requested = [str(branch) for branch in branches]
+        missing = [branch for branch in requested if branch not in fields]
+        if missing:
+            raise KeyError(f"Branches not found in ROOT tree: {missing}")
+        fields = requested
+
+    typenames = _tree_typenames(tree)
+    interpretations = _tree_interpretations(tree)
+    awkward_type = {
+        field: _field_schema_type(field, typenames=typenames, interpretations=interpretations)
+        for field in fields
+    }
+    return RootTreeSchema(
+        fields=fields,
+        awkward_type=awkward_type,
+        entry_count=_selected_entry_count(tree, start=start, stop=stop),
+    )
+
+
+def _tree_keys(tree: Any) -> list[str]:
+    keys = tree.keys() if callable(getattr(tree, "keys", None)) else []
+    return list(keys)
+
+
+def _tree_typenames(tree: Any) -> dict[str, Any]:
+    typenames = getattr(tree, "typenames", None)
+    if callable(typenames):
+        return dict(typenames())
+    if isinstance(typenames, dict):
+        return dict(typenames)
+    return {}
+
+
+def _tree_interpretations(tree: Any) -> dict[str, Any]:
+    interpretations = getattr(tree, "interpretations", None)
+    if callable(interpretations):
+        return dict(interpretations())
+    if isinstance(interpretations, dict):
+        return dict(interpretations)
+    return {}
+
+
+def _field_schema_type(
+    field: str,
+    *,
+    typenames: dict[str, Any],
+    interpretations: dict[str, Any],
+) -> str:
+    if field in typenames:
+        return str(typenames[field])
+    if field in interpretations:
+        return str(interpretations[field])
+    return "unknown"
+
+
+def _selected_entry_count(
+    tree: Any,
+    *,
+    start: int | None,
+    stop: int | None,
+) -> int | None:
+    num_entries = getattr(tree, "num_entries", None)
+    if num_entries is None:
+        return None
+    try:
+        total = int(num_entries)
+    except Exception:
+        return None
+    selected_start = max(0, int(start or 0))
+    selected_stop = total if stop is None else min(total, int(stop))
+    return max(0, selected_stop - selected_start)
+
+
 def _is_opaque_for_uproot_arrays(expr: str) -> bool:
     """
     uproot's TTree.arrays(expressions=[...]) uses an expression parser.
@@ -152,3 +263,7 @@ def _is_opaque_for_uproot_arrays(expr: str) -> bool:
     """
     s = str(expr)
     return ("./" in s) or ("/" in s and "." in s)
+
+
+def _is_remote_uri(path: str) -> bool:
+    return bool(urlparse(path).scheme)
