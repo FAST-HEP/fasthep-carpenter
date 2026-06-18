@@ -26,6 +26,7 @@ classifiers = [
 dependencies = [
     "fasthep-flow>=2026.5.0",
     "awkward",
+    "fsspec-xrootd",
     "uproot",
     "numpy",
     "hist",
