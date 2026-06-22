@@ -4,8 +4,9 @@ from pathlib import Path
 from typing import Any
 
 import awkward as ak
+import uproot
 import yaml
-from hepflow.api import compile_author_file
+from hepflow.api import compile_author_file, run_author_file
 
 from fasthep_carpenter.sources.root_tree import (
     RootTreeSchema,
@@ -62,6 +63,71 @@ def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path
         "fasthep_carpenter.operations.define:run_define_transform"
     )
     assert "read.events" in {node.id for node in plan.nodes}
+
+
+def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> None:
+    input_path = tmp_path / "input.root"
+    with uproot.recreate(input_path) as root_file:
+        root_file["events"] = {"value": [1, 2, 3]}
+
+    author_path = tmp_path / "author.yaml"
+    author = {
+        "version": "1.0",
+        "use": {
+            "profiles": [
+                "registry",
+                "fasthep_carpenter:registry",
+            ],
+        },
+        "data": {
+            "datasets": [
+                {
+                    "name": "sample",
+                    "files": [str(input_path)],
+                }
+            ],
+        },
+        "sources": {
+            "events": {
+                "kind": "root_tree",
+                "tree": "events",
+                "stream_type": "event_stream",
+            },
+        },
+        "analysis": {
+            "stages": [
+                {
+                    "id": "DerivedValue",
+                    "op": "hep.define",
+                    "params": {
+                        "variables": [
+                            {
+                                "name": "doubled",
+                                "expr": "value * 2",
+                            }
+                        ],
+                    },
+                    "write": [
+                        {
+                            "kind": "root_tree",
+                            "path": "skim.root",
+                            "tree": "events",
+                        }
+                    ],
+                }
+            ],
+        },
+    }
+    author_path.write_text(yaml.safe_dump(author, sort_keys=False), encoding="utf-8")
+    build_dir = tmp_path / "build"
+
+    result = run_author_file(author_path, outdir=build_dir)
+
+    output_path = build_dir / "artifacts" / "files" / "skim" / "sample" / "0_0.root"
+    assert result.success is True
+    assert output_path.exists()
+    with uproot.open(output_path) as root_file:
+        assert root_file["events"]["doubled"].array(library="np").tolist() == [2, 4, 6]
 
 
 def test_root_tree_source_accepts_stream_type() -> None:
