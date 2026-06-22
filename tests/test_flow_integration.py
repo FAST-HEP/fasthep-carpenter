@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 from typing import Any
 
@@ -8,6 +9,7 @@ import uproot
 import yaml
 from hepflow.api import compile_author_file, run_author_file
 
+from fasthep_carpenter.sinks.root_tree import manifest_path
 from fasthep_carpenter.sources.root_tree import (
     RootTreeSchema,
     run_root_tree_source,
@@ -84,6 +86,7 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
                 {
                     "name": "sample",
                     "files": [str(input_path)],
+                    "nevents": 3,
                 }
             ],
         },
@@ -121,13 +124,82 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
     author_path.write_text(yaml.safe_dump(author, sort_keys=False), encoding="utf-8")
     build_dir = tmp_path / "build"
 
-    result = run_author_file(author_path, outdir=build_dir)
+    result = run_author_file(author_path, outdir=build_dir, chunk_size=2)
 
     output_path = build_dir / "artifacts" / "files" / "skim" / "sample" / "0_0.root"
+    second_output_path = (
+        build_dir / "artifacts" / "files" / "skim" / "sample" / "0_1.root"
+    )
     assert result.success is True
     assert output_path.exists()
+    assert second_output_path.exists()
     with uproot.open(output_path) as root_file:
-        assert root_file["events"]["doubled"].array(library="np").tolist() == [2, 4, 6]
+        assert root_file["events"]["doubled"].array(library="np").tolist() == [2, 4]
+    with uproot.open(second_output_path) as root_file:
+        assert root_file["events"]["doubled"].array(library="np").tolist() == [6]
+
+    manifest = json.loads(
+        (build_dir / "artifacts" / "files" / "skim" / "manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    assert manifest == {
+        "kind": "root_tree",
+        "name": "skim",
+        "node_id": "write.DerivedValue.0",
+        "input_node": "stage.DerivedValue",
+        "tree": "events",
+        "total_entries": 3,
+        "datasets": {
+            "sample": {
+                "total_entries": 3,
+                "files": [
+                    {
+                        "path": "artifacts/files/skim/sample/0_0.root",
+                        "path_type": "relative_to_outdir",
+                        "dataset": "sample",
+                        "partition": 0,
+                        "attempt": 0,
+                        "entries": 2,
+                        "size_bytes": output_path.stat().st_size,
+                    },
+                    {
+                        "path": "artifacts/files/skim/sample/0_1.root",
+                        "path_type": "relative_to_outdir",
+                        "dataset": "sample",
+                        "partition": 1,
+                        "attempt": 0,
+                        "entries": 1,
+                        "size_bytes": second_output_path.stat().st_size,
+                    },
+                ],
+            }
+        },
+    }
+
+
+def test_manifest_path_uses_relative_path_for_output_below_outdir(
+    tmp_path: Path,
+) -> None:
+    outdir = tmp_path / "build"
+    output = outdir / "artifacts" / "files" / "skim.root"
+
+    assert manifest_path(output, outdir) == (
+        "artifacts/files/skim.root",
+        "relative_to_outdir",
+    )
+
+
+def test_manifest_path_uses_absolute_path_for_external_output(
+    tmp_path: Path,
+) -> None:
+    outdir = tmp_path / "build"
+    output = tmp_path / "external" / "skim.root"
+
+    assert manifest_path(output, outdir) == (
+        output.resolve().as_posix(),
+        "absolute",
+    )
 
 
 def test_root_tree_source_accepts_stream_type() -> None:

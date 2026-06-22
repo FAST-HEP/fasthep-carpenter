@@ -46,6 +46,8 @@ def run_root_tree_write(
     compression: str = "zlib",
     compression_level: int = 1,
     mode: str = "recreate",
+    ctx: dict[str, Any] | None = None,
+    meta: dict[str, Any] | None = None,
 ) -> OutputResult:
     """
     Write an event-like stream to a ROOT TTree.
@@ -81,18 +83,74 @@ def run_root_tree_write(
     with uproot.recreate(output_path, compression=compression_arg) as fout:
         fout[tree] = payload
 
+    entries = _safe_len(array)
+    manifest_record = _manifest_record(
+        output_path=output_path,
+        entries=entries,
+        tree=tree,
+        ctx=dict(ctx or {}),
+        meta=dict(meta or {}),
+    )
+
     return OutputResult(
         kind="artifact",
         path=str(output_path),
         format="root",
         metadata={
             "tree": tree,
-            "entries": _safe_len(array),
+            "entries": entries,
             "branches": list(array.fields),
             "compression": compression,
             "compression_level": compression_level,
+            "writer_manifest": manifest_record,
         },
     )
+
+
+def _manifest_record(
+    *,
+    output_path: Path,
+    entries: int | None,
+    tree: str,
+    ctx: dict[str, Any],
+    meta: dict[str, Any],
+) -> dict[str, Any]:
+    partition = dict(ctx.get("partition") or {})
+    path, path_type = manifest_path(
+        output_path,
+        Path(str(ctx.get("outdir") or ".")),
+    )
+    return {
+        "kind": "root_tree",
+        "name": str(meta.get("writer_name") or output_path.stem),
+        "node_id": str(meta.get("node_id") or ""),
+        "input_node": str(meta.get("input_node") or ""),
+        "tree": tree,
+        "path": path,
+        "path_type": path_type,
+        "dataset": str(ctx.get("dataset_name") or partition.get("dataset") or "dataset"),
+        "partition": _partition_index(partition),
+        "attempt": int(ctx.get("attempt") or 0),
+        "entries": entries,
+        "size_bytes": output_path.stat().st_size,
+    }
+
+
+def manifest_path(path: Path, outdir: Path) -> tuple[str, str]:
+    resolved = path.resolve()
+    resolved_outdir = outdir.resolve()
+    try:
+        return resolved.relative_to(resolved_outdir).as_posix(), "relative_to_outdir"
+    except ValueError:
+        return resolved.as_posix(), "absolute"
+
+
+def _partition_index(partition: dict[str, Any]) -> int:
+    part = str(partition.get("part") or "0")
+    try:
+        return int(part.rsplit("_", 1)[-1])
+    except ValueError:
+        return 0
 
 
 def _normalise_target(target: Any) -> ak.Array:
