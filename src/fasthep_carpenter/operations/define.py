@@ -27,6 +27,17 @@ DEFINE_SPEC = {
         "kind": "event_stream",
         "description": "Event stream with newly defined fields.",
     },
+    "requires": {
+        "symbols": [
+            {"from": "params.variables.*.expr", "kind": "expr"},
+            {"from": "params.variables.*.reduce.over", "kind": "expr_or_field"},
+        ]
+    },
+    "provides": {
+        "symbols": [
+            {"from": "params.variables.*.name", "kind": "field_list"},
+        ]
+    },
 }
 
 

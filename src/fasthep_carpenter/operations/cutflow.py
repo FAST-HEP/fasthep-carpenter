@@ -30,6 +30,12 @@ CUTFLOW_SPEC = {
         "stream": {"kind": "event_stream", "description": "Filtered event stream."},
         "cutflow": {"kind": "cutflow", "description": "Cutflow product."},
     },
+    "requires": {
+        "symbols": [
+            {"from": "params.selection", "kind": "cutflow"},
+            {"from": "params.weight_expr", "kind": "expr"},
+        ]
+    },
 }
 
 

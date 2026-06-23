@@ -22,6 +22,16 @@ PROJECT_FIELDS_SPEC = {
         "kind": "event_stream",
         "description": "Stream with projected alias fields added.",
     },
+    "requires": {
+        "symbols": [
+            {"from": "params.aliases.*", "kind": "field_list"},
+        ]
+    },
+    "provides": {
+        "symbols": [
+            {"from": "params.aliases", "kind": "field_list"},
+        ]
+    },
 }
 
 

@@ -34,6 +34,16 @@ LOOKUP_CSV_SPEC = {
         "kind": "event_stream",
         "description": "Event stream with CSV lookup weight fields added.",
     },
+    "requires": {
+        "symbols": [
+            {"from": "params.variable", "kind": "expr_or_field"},
+        ]
+    },
+    "provides": {
+        "symbols": [
+            {"from": "params.outputs.*", "kind": "field_list"},
+        ]
+    },
 }
 
 

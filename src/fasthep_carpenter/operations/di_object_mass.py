@@ -31,6 +31,16 @@ DI_OBJECT_MASS_SPEC = {
         "kind": "event_stream",
         "description": "Event stream with a di-object invariant mass field.",
     },
+    "requires": {
+        "symbols": [
+            {
+                "from": "params.collection",
+                "kind": "field_prefix",
+                "suffixes": ["Px", "Py", "Pz", "E"],
+            },
+            {"from": "params.mask", "kind": "expr_or_field"},
+        ]
+    },
 }
 
 

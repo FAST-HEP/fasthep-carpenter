@@ -37,6 +37,12 @@ CMS_MATCH_L1T_JETS_SPEC = {
         "kind": "event_stream",
         "description": "Event stream with matched reco/L1 jet summary fields.",
     },
+    "requires": {
+        "symbols": [
+            {"from": "params.reco.*", "kind": "expr_or_field"},
+            {"from": "params.l1.*", "kind": "expr_or_field"},
+        ]
+    },
 }
 
 

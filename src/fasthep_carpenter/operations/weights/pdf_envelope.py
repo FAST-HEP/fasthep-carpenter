@@ -28,6 +28,16 @@ PDF_ENVELOPE_SPEC = {
         "kind": "event_stream",
         "description": "Event stream with PDF envelope weight fields added.",
     },
+    "requires": {
+        "symbols": [
+            {"from": "params.inputs", "kind": "expr_or_field"},
+        ]
+    },
+    "provides": {
+        "symbols": [
+            {"from": "params.outputs.*", "kind": "field_list"},
+        ]
+    },
 }
 
 
