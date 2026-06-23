@@ -44,6 +44,23 @@ def test_root_tree_writer_declares_keep_requirements() -> None:
     }
 
 
+def test_histogram_declares_expression_requirements() -> None:
+    spec = load_object("fasthep_carpenter.operations.hist:HIST_SPEC")
+
+    assert spec["requires"] == {
+        "symbols": [
+            {
+                "from": "params.axes.*.source",
+                "kind": "expr_or_field",
+            },
+            {
+                "from": "params.weight_expr",
+                "kind": "expr",
+            },
+        ]
+    }
+
+
 def test_registry_objects_resolve_from_new_layout() -> None:
     text = (
         resources.files("fasthep_carpenter.profiles")

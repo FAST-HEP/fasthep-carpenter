@@ -30,6 +30,18 @@ HIST_SPEC = {
         "storage": {"type": "string", "required": False, "default": "count"},
     },
     "result": {"kind": "histogram", "description": "Filled histogram object."},
+    "requires": {
+        "symbols": [
+            {
+                "from": "params.axes.*.source",
+                "kind": "expr_or_field",
+            },
+            {
+                "from": "params.weight_expr",
+                "kind": "expr",
+            },
+        ]
+    },
 }
 
 

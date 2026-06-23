@@ -186,6 +186,75 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
     }
 
 
+def test_histogram_loads_unlisted_axis_and_weight_fields(tmp_path: Path) -> None:
+    input_path = tmp_path / "input.root"
+    with uproot.recreate(input_path) as root_file:
+        root_file["events"] = {
+            "Muon_Pz": [10.0, 20.0, 30.0],
+            "EventWeight": [1.0, 0.5, 2.0],
+            "Unused": [4, 5, 6],
+        }
+
+    author_path = tmp_path / "author.yaml"
+    author = {
+        "version": "1.0",
+        "use": {
+            "profiles": [
+                "registry",
+                "fasthep_carpenter:registry",
+            ],
+        },
+        "data": {
+            "datasets": [
+                {
+                    "name": "sample",
+                    "files": [str(input_path)],
+                    "nevents": 3,
+                }
+            ],
+        },
+        "sources": {
+            "events": {
+                "kind": "root_tree",
+                "tree": "events",
+                "stream_type": "event_stream",
+            },
+        },
+        "analysis": {
+            "stages": [
+                {
+                    "id": "MuonPz",
+                    "op": "hep.hist",
+                    "params": {
+                        "storage": "weighted",
+                        "axes": [
+                            {
+                                "name": "muon_pz",
+                                "source": "Muon_Pz",
+                                "type": "regular",
+                                "bins": {"low": 0, "high": 40, "nbins": 4},
+                            }
+                        ],
+                        "weight_expr": "EventWeight",
+                    },
+                }
+            ],
+        },
+    }
+    author_path.write_text(yaml.safe_dump(author, sort_keys=False), encoding="utf-8")
+    build_dir = tmp_path / "build"
+
+    plan = compile_author_file(author_path, outdir=build_dir)
+    result = run_author_file(author_path, outdir=build_dir)
+
+    assert plan.get_node("read.events").params["branches"] == [
+        "EventWeight",
+        "Muon_Pz",
+    ]
+    assert result.success is True
+    assert (build_dir / "artifacts" / "histograms" / "MuonPz.pkl").exists()
+
+
 def test_manifest_path_uses_relative_path_for_output_below_outdir(
     tmp_path: Path,
 ) -> None:
