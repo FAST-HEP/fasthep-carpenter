@@ -31,6 +31,19 @@ def test_load_one_spec_and_impl_object() -> None:
     assert callable(impl)
 
 
+def test_root_tree_writer_declares_keep_requirements() -> None:
+    spec = load_object("fasthep_carpenter.sinks.root_tree:ROOT_TREE_WRITE_SPEC")
+
+    assert spec["requires"] == {
+        "symbols": [
+            {
+                "from": "params.keep",
+                "kind": "field_list",
+            }
+        ]
+    }
+
+
 def test_registry_objects_resolve_from_new_layout() -> None:
     text = (
         resources.files("fasthep_carpenter.profiles")

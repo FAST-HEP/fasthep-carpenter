@@ -36,6 +36,14 @@ ROOT_TREE_WRITE_SPEC = {
         "kind": "artifact",
         "description": "A written ROOT file containing a TTree.",
     },
+    "requires": {
+        "symbols": [
+            {
+                "from": "params.keep",
+                "kind": "field_list",
+            }
+        ]
+    },
 }
 
 
