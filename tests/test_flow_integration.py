@@ -70,7 +70,7 @@ def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path
 def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> None:
     input_path = tmp_path / "input.root"
     with uproot.recreate(input_path) as root_file:
-        root_file["events"] = {"value": [1, 2, 3]}
+        root_file["events"] = {"Muon_Pt": [1, 2, 3]}
 
     author_path = tmp_path / "author.yaml"
     author = {
@@ -97,6 +97,12 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
                 "stream_type": "event_stream",
             },
         },
+        "outputs": {
+            "small": {
+                "tree": "events",
+                "keep": ["Muon_Pt"],
+            }
+        },
         "analysis": {
             "stages": [
                 {
@@ -106,7 +112,7 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
                         "variables": [
                             {
                                 "name": "doubled",
-                                "expr": "value * 2",
+                                "expr": "Muon_Pt * 2",
                             }
                         ],
                     },
@@ -114,7 +120,7 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
                         {
                             "kind": "root_tree",
                             "path": "skim.root",
-                            "tree": "events",
+                            "use": "small",
                         }
                     ],
                 }
@@ -134,9 +140,11 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
     assert output_path.exists()
     assert second_output_path.exists()
     with uproot.open(output_path) as root_file:
-        assert root_file["events"]["doubled"].array(library="np").tolist() == [2, 4]
+        assert root_file["events"].keys() == ["Muon_Pt"]
+        assert root_file["events"]["Muon_Pt"].array(library="np").tolist() == [1, 2]
     with uproot.open(second_output_path) as root_file:
-        assert root_file["events"]["doubled"].array(library="np").tolist() == [6]
+        assert root_file["events"].keys() == ["Muon_Pt"]
+        assert root_file["events"]["Muon_Pt"].array(library="np").tolist() == [3]
 
     manifest = json.loads(
         (build_dir / "artifacts" / "files" / "skim" / "manifest.json").read_text(

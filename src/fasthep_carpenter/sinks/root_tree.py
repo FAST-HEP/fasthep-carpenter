@@ -7,6 +7,8 @@ import awkward as ak
 import uproot
 from hepflow.model.io import OutputResult
 
+from fasthep_carpenter.runtime.compat import unwrap_legacy_data_envelope
+
 ROOT_TREE_WRITE_SPEC = {
     "name": "root_tree",
     "kind": "writer",
@@ -63,7 +65,7 @@ def run_root_tree_write(
             "Only 'recreate' is currently supported."
         )
 
-    array = _normalise_target(target)
+    array = _normalise_target(unwrap_legacy_data_envelope(target))
 
     if keep is not None:
         missing = [field for field in keep if field not in array.fields]
