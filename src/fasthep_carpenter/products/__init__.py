@@ -5,9 +5,28 @@ import re
 from pathlib import Path
 from typing import Any
 
+import awkward as ak
 from hepflow.build_layout import BuildPaths
 from hepflow.runtime.materialize import product_id
 from hepflow.utils import write_json, write_pickle
+
+
+def merge_event_streams(
+    values: list[Any],
+    *,
+    node: Any,
+    output_name: str,
+    dataset_name: str | None = None,
+) -> Any:
+    """Merge partition-local Awkward streams without coupling Flow to Awkward."""
+    del node, output_name
+    if len(values) == 1:
+        return values[0]
+    if dataset_name is None:
+        return list(values)
+    if all(isinstance(value, ak.Array) for value in values):
+        return ak.concatenate(values)
+    return list(values)
 
 
 def merge_histogram_products(

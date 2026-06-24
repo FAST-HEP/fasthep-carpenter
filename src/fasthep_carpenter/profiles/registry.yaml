@@ -53,6 +53,9 @@ registry:
       impl: fasthep_carpenter.runtime.modifiers.cuda_jit:CUDAJitModifier
 
   product_handlers:
+    event_stream:
+      merge: fasthep_carpenter.products:merge_event_streams
+
     histogram:
       merge: fasthep_carpenter.products:merge_histogram_products
       materialize: fasthep_carpenter.products:materialize_histogram_product

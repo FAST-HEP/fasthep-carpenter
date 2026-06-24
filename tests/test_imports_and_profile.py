@@ -76,4 +76,5 @@ def test_registry_objects_resolve_from_new_layout() -> None:
 
     for entry in registry["product_handlers"].values():
         assert callable(load_object(entry["merge"]))
-        assert callable(load_object(entry["materialize"]))
+        if "materialize" in entry:
+            assert callable(load_object(entry["materialize"]))

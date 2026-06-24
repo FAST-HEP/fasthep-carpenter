@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import awkward as ak
 from hepflow.model.plan import ExecutionNode
 from hepflow.utils import read_pickle
 
@@ -10,7 +11,41 @@ from fasthep_carpenter.products import (
     materialize_cutflow_product,
     materialize_histogram_product,
     merge_cutflow_products,
+    merge_event_streams,
 )
+
+
+def test_event_stream_handler_concatenates_dataset_partitions() -> None:
+    first = ak.Array({"value": [1, 2]})
+    second = ak.Array({"value": [3]})
+
+    merged = merge_event_streams(
+        [first, second],
+        node=None,
+        output_name="stream",
+        dataset_name="data",
+    )
+
+    assert ak.to_list(merged) == [
+        {"value": 1},
+        {"value": 2},
+        {"value": 3},
+    ]
+
+
+def test_event_stream_handler_preserves_cross_dataset_values() -> None:
+    values = [ak.Array([1]), ak.Array([2])]
+
+    merged = merge_event_streams(
+        values,
+        node=None,
+        output_name="stream",
+        dataset_name=None,
+    )
+
+    assert isinstance(merged, list)
+    assert merged[0] is values[0]
+    assert merged[1] is values[1]
 
 
 def test_histogram_product_handler_materializes_pickle_and_manifest(
