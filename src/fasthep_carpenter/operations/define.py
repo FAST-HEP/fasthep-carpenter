@@ -7,12 +7,12 @@ from hepflow.compiler.expr_symbols import data_symbols_in_expr
 from hepflow.model.data_flow import DataDependencyResult
 from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 from hepflow.runtime.engine import eval_expr
-from hepflow.runtime.stream_readers import get_stream_array
 
 from fasthep_carpenter.runtime.compat import (
     legacy_data_envelope,
     unwrap_legacy_data_envelope,
 )
+from fasthep_carpenter.runtime.stream_readers import get_stream_array
 
 DEFINE_SPEC = {
     "name": "hep.define",

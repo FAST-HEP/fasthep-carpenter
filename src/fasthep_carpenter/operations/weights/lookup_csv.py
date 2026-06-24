@@ -8,12 +8,12 @@ import awkward as ak
 import numpy as np
 from hepflow.model.data_flow import DataDependencyResult
 from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
-from hepflow.runtime.stream_readers import get_stream_array
 
 from fasthep_carpenter.runtime.compat import (
     legacy_data_envelope,
     unwrap_legacy_data_envelope,
 )
+from fasthep_carpenter.runtime.stream_readers import get_stream_array
 
 LOOKUP_CSV_SPEC = {
     "name": "hep.weights.lookup_csv",
