@@ -24,14 +24,16 @@ CMS_MATCH_L1T_JETS_SPEC = {
     "name": "cms.match_l1t_jets",
     "kind": "transform",
     "version": "1.0",
-    "dependencies": {
-        "parser": "fasthep_carpenter.operations.cms.match_l1t_jets:parse_match_l1t_jets_data_dependencies",
-    },
     "input": {"name": "stream", "kind": "event_stream", "required": True},
     "params": {
         "reco": {"type": "mapping", "required": True},
         "l1": {"type": "mapping", "required": True},
         "dr_max": {"type": "number", "required": False, "default": 0.4},
+        "output_names": {
+            "type": "list[string]",
+            "required": False,
+            "default": sorted(MATCH_L1T_JETS_OUTPUTS),
+        },
     },
     "result": {
         "kind": "event_stream",
@@ -41,6 +43,11 @@ CMS_MATCH_L1T_JETS_SPEC = {
         "symbols": [
             {"from": "params.reco.*", "kind": "expr_or_field"},
             {"from": "params.l1.*", "kind": "expr_or_field"},
+        ]
+    },
+    "provides": {
+        "symbols": [
+            {"from": "params.output_names", "kind": "field_list"},
         ]
     },
 }

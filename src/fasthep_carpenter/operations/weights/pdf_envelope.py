@@ -16,9 +16,6 @@ PDF_ENVELOPE_SPEC = {
     "name": "hep.weights.pdf_envelope",
     "kind": "transform",
     "version": "1.0",
-    "dependencies": {
-        "parser": "fasthep_carpenter.operations.weights.pdf_envelope:parse_pdf_envelope_dependencies",
-    },
     "input": {"name": "stream", "kind": "event_stream", "required": True},
     "params": {
         "inputs": {"type": "string", "required": True},

@@ -19,9 +19,6 @@ LOOKUP_CSV_SPEC = {
     "name": "hep.weights.lookup_csv",
     "kind": "transform",
     "version": "1.0",
-    "dependencies": {
-        "parser": "fasthep_carpenter.operations.weights.lookup_csv:parse_lookup_csv_dependencies",
-    },
     "input": {"name": "stream", "kind": "event_stream", "required": True},
     "params": {
         "path": {"type": "string", "required": True},

@@ -18,9 +18,6 @@ DEFINE_SPEC = {
     "name": "hep.define",
     "kind": "transform",
     "version": "1.0",
-    "dependencies": {
-        "parser": "fasthep_carpenter.operations.define:parse_define_column_dependencies",
-    },
     "input": {"name": "stream", "kind": "event_stream", "required": True},
     "params": {"variables": {"type": "list[mapping]", "required": True}},
     "result": {

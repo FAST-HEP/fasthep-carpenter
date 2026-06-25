@@ -18,14 +18,11 @@ DI_OBJECT_MASS_SPEC = {
     "name": "hep.di_object_mass",
     "kind": "transform",
     "version": "1.0",
-    "dependencies": {
-        "parser": "fasthep_carpenter.operations.di_object_mass:parse_di_object_mass_data_dependencies",
-    },
     "input": {"name": "stream", "kind": "event_stream", "required": True},
     "params": {
         "collection": {"type": "string", "required": False, "default": "Muon"},
         "mask": {"type": "string", "required": False},
-        "out_var": {"type": "string", "required": False},
+        "out_var": {"type": "string", "required": False, "default": "DiMuon_Mass"},
     },
     "result": {
         "kind": "event_stream",
@@ -39,6 +36,11 @@ DI_OBJECT_MASS_SPEC = {
                 "suffixes": ["Px", "Py", "Pz", "E"],
             },
             {"from": "params.mask", "kind": "expr_or_field"},
+        ]
+    },
+    "provides": {
+        "symbols": [
+            {"from": "params.out_var", "kind": "field_list"},
         ]
     },
 }

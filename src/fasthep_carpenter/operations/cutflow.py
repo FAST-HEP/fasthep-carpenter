@@ -18,9 +18,6 @@ CUTFLOW_SPEC = {
     "name": "hep.selection.cutflow",
     "kind": "transform",
     "version": "1.0",
-    "dependencies": {
-        "parser": "fasthep_carpenter.operations.cutflow:parse_cutflow_column_dependencies",
-    },
     "input": {"name": "stream", "kind": "event_stream", "required": True},
     "params": {
         "selection": {"type": "mapping", "required": True},

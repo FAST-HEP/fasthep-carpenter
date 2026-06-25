@@ -10,9 +10,6 @@ PROJECT_FIELDS_SPEC = {
     "name": "core.project_fields",
     "kind": "transform",
     "version": "1.0",
-    "dependencies": {
-        "parser": "fasthep_carpenter.operations.project_fields:parse_project_fields_column_dependencies",
-    },
     "input": {"name": "stream", "kind": "event_stream", "required": True},
     "params": {
         "stream_id": {"type": "string", "required": True},

@@ -19,9 +19,6 @@ HIST_SPEC = {
     "name": "hep.hist",
     "kind": "transform",
     "version": "1.0",
-    "dependencies": {
-        "parser": "fasthep_carpenter.operations.hist:parse_hist_column_dependencies",
-    },
     "input": {"name": "stream", "kind": "event_stream", "required": True},
     "params": {
         "axes": {"type": "list[mapping]", "required": True},
