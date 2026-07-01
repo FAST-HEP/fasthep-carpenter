@@ -151,6 +151,8 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
             encoding="utf-8"
         )
     )
+    file_entries = manifest["datasets"]["sample"]["files"]
+    provenance_links = [item.pop("provenance") for item in file_entries]
     assert manifest == {
         "kind": "root_tree",
         "name": "skim",
@@ -184,6 +186,11 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
             }
         },
     }
+    for link in provenance_links:
+        assert link["record"].startswith("artifacts/provenance/records/artifact-")
+        assert link["record"].endswith(".json")
+        assert link["record_hash"].startswith("sha256:")
+        assert (build_dir / link["record"]).is_file()
 
 
 def test_histogram_loads_unlisted_axis_and_weight_fields(tmp_path: Path) -> None:
@@ -323,6 +330,7 @@ def test_root_tree_source_allows_remote_root_uri(
     )
 
     assert opened == ["root://example.test//store/data.root"]
+    assert isinstance(result, dict)
     assert "DoubleMuon" in result
 
 

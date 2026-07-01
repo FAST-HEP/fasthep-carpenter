@@ -12,8 +12,8 @@ import yaml
 from hepflow.registry.loaders import load_object, load_runtime_entry
 
 from fasthep_carpenter.runtime.modifiers.cuda_jit import (
-    CUDAJitModifier,
     MISSING_NUMBA_CUDA_MESSAGE,
+    CUDAJitModifier,
 )
 
 

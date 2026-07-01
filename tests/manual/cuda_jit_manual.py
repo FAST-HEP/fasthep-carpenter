@@ -9,7 +9,7 @@ from fasthep_carpenter.runtime.modifiers.cuda_jit import CUDAJitModifier
 
 def main() -> None:
     try:
-        from numba import cuda
+        from numba import cuda  # noqa: PLC0415
     except Exception as exc:
         print(f"Skipping manual cuda.jit check: Numba CUDA is unavailable ({exc}).")
         return

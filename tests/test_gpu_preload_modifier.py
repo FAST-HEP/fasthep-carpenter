@@ -13,8 +13,8 @@ import yaml
 from hepflow.registry.loaders import load_object, load_runtime_entry
 
 from fasthep_carpenter.runtime.modifiers.gpu_preload import (
-    GPUPreloadModifier,
     MISSING_CUPY_MESSAGE,
+    GPUPreloadModifier,
 )
 
 

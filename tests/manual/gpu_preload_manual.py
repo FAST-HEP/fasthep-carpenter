@@ -9,7 +9,7 @@ from fasthep_carpenter.runtime.modifiers.gpu_preload import GPUPreloadModifier
 
 def main() -> None:
     try:
-        import cupy
+        import cupy  # noqa: PLC0415
     except ModuleNotFoundError:
         print("Skipping manual gpu.preload check: CuPy is not installed.")
         return
