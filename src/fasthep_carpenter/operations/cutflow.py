@@ -22,6 +22,8 @@ CUTFLOW_SPEC = {
     "params": {
         "selection": {"type": "mapping", "required": True},
         "weight_expr": {"type": "string", "required": False},
+        "output_field": {"type": "string", "required": False},
+        "filter": {"type": "boolean", "required": False},
     },
     "result": {
         "stream": {"kind": "event_stream", "description": "Filtered event stream."},
@@ -31,6 +33,11 @@ CUTFLOW_SPEC = {
         "symbols": [
             {"from": "params.selection", "kind": "cutflow"},
             {"from": "params.weight_expr", "kind": "expr"},
+        ]
+    },
+    "provides": {
+        "symbols": [
+            {"from": "params.output_field", "kind": "field_list"},
         ]
     },
 }
@@ -115,11 +122,24 @@ def run_cutflow(
             cuts.append(_cut_row(node_id, selection_name, i, step, before, current, w))
         final_mask = current
 
-    filtered = events[final_mask]
+    output_field = params.get("output_field")
+    if isinstance(output_field, str) and output_field:
+        events = ak.with_field(events, final_mask, output_field)
+
+    should_filter = bool(params.get("filter", True))
+    filtered = events[final_mask] if should_filter else events
     return {DEFAULT_PRIMARY_STREAM_ID: filtered, "cutflow": {"cuts": cuts}}
 
 
-def run_cutflow_transform(*, stream, selection, weight_expr=None, ctx=None, **kwargs):
+def run_cutflow_transform(
+    *,
+    stream,
+    selection,
+    weight_expr=None,
+    output_field=None,
+    ctx=None,
+    **kwargs,
+):
     stream = unwrap_legacy_data_envelope(stream)
     legacy_data = legacy_data_envelope(stream)
     legacy_params = {
@@ -127,6 +147,9 @@ def run_cutflow_transform(*, stream, selection, weight_expr=None, ctx=None, **kw
     }
     if weight_expr is not None:
         legacy_params["weight_expr"] = weight_expr
+    if output_field is not None:
+        legacy_params["output_field"] = output_field
+    legacy_params["filter"] = kwargs.pop("filter", True)
     legacy_ctx = ctx or {}
     if "primary_stream" not in legacy_ctx:
         legacy_ctx["primary_stream"] = DEFAULT_PRIMARY_STREAM_ID
@@ -135,7 +158,6 @@ def run_cutflow_transform(*, stream, selection, weight_expr=None, ctx=None, **kw
         data=legacy_data,
         params=legacy_params,
         ctx=legacy_ctx,
-        **kwargs,
     )
     return {
         "stream": out[DEFAULT_PRIMARY_STREAM_ID],

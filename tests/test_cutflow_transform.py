@@ -3,9 +3,10 @@ from __future__ import annotations
 from typing import Any
 
 import awkward as ak
+import pytest
 from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 
-from fasthep_carpenter.operations.cutflow import run_cutflow
+from fasthep_carpenter.operations.cutflow import run_cutflow, run_cutflow_transform
 
 
 def test_cutflow_transform_preserves_full_selection_stats() -> None:
@@ -90,3 +91,78 @@ def test_cutflow_transform_supports_branched_selection_groups() -> None:
     assert cuts_by_name["signal[0]"]["n_unweighted_out"] == 1
     assert cuts_by_name["control[0]"]["n_in"] == 2
     assert cuts_by_name["control[0]"]["n_out"] == 1
+
+
+def test_cutflow_transform_can_materialize_final_selection_without_filtering() -> None:
+    events = ak.Array(
+        {
+            "Flag_A": [True, True, False, True],
+            "Flag_B": [True, False, True, False],
+            "Flag_C": [True, True, False, False],
+        }
+    )
+
+    out = run_cutflow(
+        data={DEFAULT_PRIMARY_STREAM_ID: events},
+        params={
+            "filter": False,
+            "output_field": "Noise_filter_selection",
+            "selection": {"Noise_filter_selection": ["Flag_A", "Flag_B", "Flag_C"]},
+        },
+        ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
+    )
+
+    selected = ak.to_list(out[DEFAULT_PRIMARY_STREAM_ID]["Noise_filter_selection"])
+    assert selected == [True, False, False, False]
+    assert len(out[DEFAULT_PRIMARY_STREAM_ID]) == 4
+    assert out["cutflow"]["cuts"][-1]["selection"] == "Noise_filter_selection"
+
+
+def test_cutflow_transform_defaults_to_filtering_after_materializing_selection() -> None:
+    events = ak.Array(
+        {
+            "Flag_A": [True, True, False],
+            "Flag_B": [True, False, True],
+        }
+    )
+
+    out = run_cutflow(
+        data={DEFAULT_PRIMARY_STREAM_ID: events},
+        params={
+            "output_field": "Noise_filter_selection",
+            "selection": {"Noise_filter_selection": ["Flag_A", "Flag_B"]},
+        },
+        ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
+    )
+
+    selected = ak.to_list(out[DEFAULT_PRIMARY_STREAM_ID]["Noise_filter_selection"])
+    assert selected == [True]
+
+
+def test_cutflow_transform_missing_required_field_fails_clearly() -> None:
+    events = ak.Array({"Flag_A": [True, False]})
+
+    with pytest.raises(Exception, match="Flag_B"):
+        run_cutflow(
+            data={DEFAULT_PRIMARY_STREAM_ID: events},
+            params={
+                "filter": False,
+                "output_field": "Noise_filter_selection",
+                "selection": {"Noise_filter_selection": ["Flag_A", "Flag_B"]},
+            },
+            ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
+        )
+
+
+def test_cutflow_runtime_wrapper_ignores_metadata_kwargs() -> None:
+    events = ak.Array({"Flag_A": [True, False]})
+
+    out = run_cutflow_transform(
+        stream=events,
+        selection={"Noise_filter_selection": ["Flag_A"]},
+        output_field="Noise_filter_selection",
+        filter=False,
+        legacy={"module": "NoiseFilterSelection"},
+    )
+
+    assert ak.to_list(out["stream"]["Noise_filter_selection"]) == [True, False]

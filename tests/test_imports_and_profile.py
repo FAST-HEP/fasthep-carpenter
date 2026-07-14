@@ -57,6 +57,10 @@ def test_histogram_declares_expression_requirements() -> None:
                 "from": "params.weight_expr",
                 "kind": "expr",
             },
+            {
+                "from": "params.variations.weights.*",
+                "kind": "expr",
+            },
         ]
     }
 

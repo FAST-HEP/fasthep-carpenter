@@ -74,6 +74,31 @@ def test_hist_declarative_dependencies() -> None:
     assert deps.produces == set()
 
 
+def test_hist_variation_weight_dependencies() -> None:
+    deps = _declarative_dependencies(
+        HIST_SPEC,
+        {
+            "axes": [{"name": "npv", "source": "PV_npvs"}],
+            "variations": {
+                "axis": "variation",
+                "weights": {
+                    "nominal": "weight_pu_nominal",
+                    "up": "weight_pu_up",
+                    "down": "weight_pu_down",
+                },
+            },
+        },
+    )
+
+    assert deps.consumes == {
+        "PV_npvs",
+        "weight_pu_nominal",
+        "weight_pu_up",
+        "weight_pu_down",
+    }
+    assert deps.produces == set()
+
+
 def test_cutflow_declarative_dependencies_find_nested_selections() -> None:
     deps = _declarative_dependencies(
         CUTFLOW_SPEC,
