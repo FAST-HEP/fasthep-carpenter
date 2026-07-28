@@ -30,6 +30,7 @@ dependencies = [
     "uproot",
     "numpy",
     "hist",
+    "vector",
 ]
 
 [project.optional-dependencies]
@@ -126,5 +127,9 @@ addopts = [
     "--strict-config",
 ]
 xfail_strict = true
-filterwarnings = ["error"]
+filterwarnings = [
+    "error",
+    "ignore:The 'generic' unit for NumPy timedelta is deprecated.*:DeprecationWarning",
+    "ignore:Setting the shape on a NumPy array has been deprecated.*:DeprecationWarning",
+]
 testpaths = ["tests"]

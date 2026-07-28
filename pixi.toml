@@ -15,6 +15,7 @@ mypy = "*"
 pre-commit = "*"
 codespell = "*"
 twine = "*"
+vector = "*"
 
 [pypi-dependencies]
 fasthep-carpenter = { path = ".", editable = true }
