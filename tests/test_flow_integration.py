@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+from importlib import import_module
 from pathlib import Path
 from typing import Any
 
 import awkward as ak
 import uproot
 import yaml
-from hepflow.api import compile_author_file, run_author_file
+from hepflow.compiler.normalize import normalize_author
 
 from fasthep_carpenter.sinks.root_tree import manifest_path
 from fasthep_carpenter.sources.root_tree import (
@@ -17,6 +18,7 @@ from fasthep_carpenter.sources.root_tree import (
 
 
 def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path) -> None:
+    compile_author_file = _hepflow_api().compile_author_file
     author_path = tmp_path / "author.yaml"
     author = {
         "version": "1.0",
@@ -68,6 +70,7 @@ def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path
 
 
 def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> None:
+    run_author_file = _hepflow_api().run_author_file
     input_path = tmp_path / "input.root"
     with uproot.recreate(input_path) as root_file:
         root_file["events"] = {"Muon_Pt": [1, 2, 3]}
@@ -194,6 +197,9 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
 
 
 def test_histogram_loads_unlisted_axis_and_weight_fields(tmp_path: Path) -> None:
+    api = _hepflow_api()
+    compile_author_file = api.compile_author_file
+    run_author_file = api.run_author_file
     input_path = tmp_path / "input.root"
     with uproot.recreate(input_path) as root_file:
         root_file["events"] = {
@@ -260,6 +266,114 @@ def test_histogram_loads_unlisted_axis_and_weight_fields(tmp_path: Path) -> None
     ]
     assert result.success is True
     assert (build_dir / "artifacts" / "histograms" / "MuonPz.pkl").exists()
+
+
+def test_clean_params_collection_references_are_visible_to_data_flow(
+    tmp_path: Path,
+) -> None:
+    author = {
+        "version": "1.0",
+        "registry": {
+            "sources": {
+                "root_tree": {
+                    "spec": "fasthep_carpenter.sources.root_tree:ROOT_TREE_SOURCE_SPEC",
+                    "impl": "fasthep_carpenter.sources.root_tree:run_root_tree_source",
+                },
+            },
+            "transforms": {
+                "hep.define": {
+                    "spec": "fasthep_carpenter.operations.define:DEFINE_SPEC",
+                    "impl": "fasthep_carpenter.operations.define:run_define_transform",
+                },
+                "hep.clean": {
+                    "spec": "fasthep_carpenter.operations.clean:CLEAN_SPEC",
+                    "impl": "fasthep_carpenter.operations.clean:run_clean_transform",
+                },
+            },
+        },
+        "data": {
+            "datasets": [],
+            "defaults": {},
+        },
+        "sources": {
+            "events": {
+                "kind": "root_tree",
+                "tree": "Events",
+                "stream_type": "event_stream",
+            },
+        },
+        "analysis": {
+            "stages": [
+                {
+                    "id": "SelectedObjects",
+                    "op": "hep.define",
+                    "params": {
+                        "variables": [
+                            {"name": "selected_photons_eta", "expr": "Photon_eta"},
+                            {"name": "selected_photons_phi", "expr": "Photon_phi"},
+                            {"name": "selected_photons_pt", "expr": "Photon_pt"},
+                            {"name": "selected_muons_eta", "expr": "Muon_eta"},
+                            {"name": "selected_muons_phi", "expr": "Muon_phi"},
+                            {"name": "selected_electrons_eta", "expr": "Electron_eta"},
+                            {"name": "selected_electrons_phi", "expr": "Electron_phi"},
+                        ],
+                    },
+                },
+                {
+                    "id": "PhotonTightCleanAgainstLeptons",
+                    "op": "hep.clean",
+                    "params": {
+                        "source": "selected_photons",
+                        "clean_against": [
+                            "selected_muons",
+                            "selected_electrons",
+                        ],
+                        "output": "cleaned_photons",
+                        "sort_by": "pt",
+                        "sort_order": "descending",
+                        "diagnostics": {
+                            "removed_count": "nremoved_photon_overlap",
+                        },
+                    },
+                },
+            ],
+        },
+    }
+
+    _graph, plan = _build_plan_from_normalized(normalize_author(author))
+
+    assert plan.registry["transforms"]["hep.clean"]["impl"] == (
+        "fasthep_carpenter.operations.clean:run_clean_transform"
+    )
+    assert plan.data_flow["consumers"]["selected_photons_eta"] == [
+        "stage.PhotonTightCleanAgainstLeptons"
+    ]
+    assert plan.data_flow["consumers"]["selected_muons_eta"] == [
+        "stage.PhotonTightCleanAgainstLeptons"
+    ]
+    assert plan.data_flow["consumers"]["selected_electrons_eta"] == [
+        "stage.PhotonTightCleanAgainstLeptons"
+    ]
+    assert plan.data_flow["consumers"]["selected_photons_pt"] == [
+        "stage.PhotonTightCleanAgainstLeptons"
+    ]
+    assert plan.data_flow["origins"]["cleaned_photons"] == {
+        "kind": "produced",
+        "node": "stage.PhotonTightCleanAgainstLeptons",
+    }
+    assert plan.data_flow["origins"]["nremoved_photon_overlap"] == {
+        "kind": "produced",
+        "node": "stage.PhotonTightCleanAgainstLeptons",
+    }
+    assert plan.get_node("read.events").params["branches"] == [
+        "Electron_eta",
+        "Electron_phi",
+        "Muon_eta",
+        "Muon_phi",
+        "Photon_eta",
+        "Photon_phi",
+        "Photon_pt",
+    ]
 
 
 def test_manifest_path_uses_relative_path_for_output_below_outdir(
@@ -425,3 +539,11 @@ def test_root_tree_source_partition_null_range_keeps_source_range(monkeypatch) -
     assert calls == [
         {"entry_start": 0, "entry_stop": 1000, "library": "ak"},
     ]
+
+
+def _hepflow_api() -> Any:
+    return import_module("hepflow.api")
+
+
+def _build_plan_from_normalized(normalized: dict[str, Any]) -> Any:
+    return import_module("hepflow.compiler.plan").build_plan_from_normalized(normalized)

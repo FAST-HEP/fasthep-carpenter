@@ -7,6 +7,7 @@ from hepflow.compiler.data_flow import (
     parse_component_data_dependencies,
 )
 
+from fasthep_carpenter.operations.clean import CLEAN_SPEC
 from fasthep_carpenter.operations.cms.match_l1t_jets import (
     CMS_MATCH_L1T_JETS_SPEC,
     MATCH_L1T_JETS_OUTPUTS,
@@ -167,6 +168,53 @@ def test_cms_match_l1t_jets_declarative_requirements() -> None:
         "l1_phi",
     }
     assert deps.produces == MATCH_L1T_JETS_OUTPUTS
+
+
+def test_clean_dependencies_expose_param_collection_references() -> None:
+    deps = _declarative_dependencies(
+        CLEAN_SPEC,
+        {
+            "source": "selected_photons",
+            "clean_against": ["selected_muons", "selected_electrons"],
+            "output": "cleaned_photons",
+            "diagnostics": {"removed_count": "nremoved_photon_overlap"},
+        },
+    )
+
+    assert deps.consumes == {
+        "selected_photons_eta",
+        "selected_photons_phi",
+        "selected_muons_eta",
+        "selected_muons_phi",
+        "selected_electrons_eta",
+        "selected_electrons_phi",
+    }
+    assert deps.produces == {"cleaned_photons", "nremoved_photon_overlap"}
+
+
+def test_clean_dependencies_require_source_sort_field_only_when_sorting() -> None:
+    unsorted = _declarative_dependencies(
+        CLEAN_SPEC,
+        {
+            "source": "selected_photons",
+            "clean_against": ["selected_muons"],
+            "output": "cleaned_photons",
+            "diagnostics": {"removed_count": False},
+        },
+    )
+    sorted_deps = _declarative_dependencies(
+        CLEAN_SPEC,
+        {
+            "source": "selected_photons",
+            "clean_against": ["selected_muons"],
+            "output": "cleaned_photons",
+            "sort_by": "pt",
+            "diagnostics": {"removed_count": False},
+        },
+    )
+
+    assert "selected_photons_pt" not in unsorted.consumes
+    assert "selected_photons_pt" in sorted_deps.consumes
 
 
 def test_weight_operations_declarative_dependencies() -> None:

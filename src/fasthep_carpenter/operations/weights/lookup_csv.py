@@ -196,7 +196,7 @@ def _lookup_values(
     upper = table["__upper__"]
     values = table[value_column]
 
-    output = np.empty(len(variable_values), dtype=float)
+    output: np.ndarray = np.empty(len(variable_values), dtype=float)
     for index, value in enumerate(variable_values):
         matches = np.nonzero((lower <= value) & (value < upper))[0]
         if len(matches) == 0:
