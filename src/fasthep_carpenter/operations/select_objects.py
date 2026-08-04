@@ -10,6 +10,7 @@ from hepflow.runtime import ComponentContext
 from hepflow.runtime.engine import eval_expr
 
 DEFAULT_SORT = {"by": "pt", "order": "descending"}
+DEFAULT_FUNCTIONS = {"abs", "cosh", "exp", "log", "log10", "sqrt", "where"}
 
 
 SELECT_OBJECTS_SPEC = {
@@ -102,7 +103,7 @@ def run_select_objects(
                 "derived": derived_exprs,
                 "sort": sort_cfg,
             },
-            known_functions={"abs", "exp", "log", "log10", "sqrt", "where"},
+            known_functions=DEFAULT_FUNCTIONS,
             known_constants=set(),
             context_symbols=set(),
         ).consumes
@@ -180,7 +181,7 @@ def resolve_collection_expression(expression: str, *, collection: str) -> str:
     expression_text = str(expression).strip()
     relative = _relative_symbols(
         expression_text,
-        known_functions={"abs", "exp", "log", "log10", "sqrt", "where"},
+        known_functions=DEFAULT_FUNCTIONS,
         known_constants=set(),
         context_symbols=set(),
     )

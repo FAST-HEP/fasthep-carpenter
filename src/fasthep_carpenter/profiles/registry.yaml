@@ -78,6 +78,7 @@ registry:
     log: numpy:log
     log10: numpy:log10
     exp: numpy:exp
+    cosh: numpy:cosh
     where: numpy:where
     fill_none: awkward:fill_none
     pad_none: awkward:pad_none

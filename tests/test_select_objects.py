@@ -47,6 +47,21 @@ def test_dependencies_include_selection_keep_default_sort_and_derived() -> None:
     )
 
 
+def test_dependencies_treat_cosh_as_function_for_phase_space_guards() -> None:
+    deps = _dependencies(
+        {
+            "collection": "Jet",
+            "output": "selected_Jet",
+            "selection": ["Nominal_pt * cosh(eta) < 6800"],
+            "keep": ["pt", "eta"],
+            "derived": {"pt": "Nominal_pt"},
+        }
+    )
+
+    assert "Jet_cosh" not in deps.consumes
+    assert deps.consumes == {"Jet_Nominal_pt", "Jet_eta"}
+
+
 def test_sort_field_is_not_implicitly_provided() -> None:
     deps = _dependencies(
         {
@@ -293,7 +308,7 @@ def _dependencies(params: dict[str, object]) -> DataDependencyResult:
         spec=SELECT_OBJECTS_SPEC,
         params=params,
         dep_ctx=DependencyContext(
-            known_functions={"abs", "exp", "log", "log10", "sqrt", "where"},
+            known_functions={"abs", "cosh", "exp", "log", "log10", "sqrt", "where"},
             known_constants=set(),
             context_symbols=set(),
         ),
