@@ -81,7 +81,7 @@ def parse_clean_data_dependencies(
             *(f"{target}_eta" for target in targets),
             *(f"{target}_phi" for target in targets),
         },
-        produces={output},
+        produces={output, f"n{output}"},
     )
 
     fields = _collection_fields(params.get("fields"))
@@ -199,6 +199,7 @@ def run_clean(
         cleaned = cleaned[order]
 
     out = _write_collection(events, output_name, cleaned, source.style)
+    out = ak.with_field(out, ak.num(cleaned, axis=1), f"n{output_name}")
 
     removed_count_name = clean_removed_count_name(params)
     if removed_count_name is not None:
