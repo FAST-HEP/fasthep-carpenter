@@ -17,6 +17,7 @@ from fasthep_carpenter.operations.define import DEFINE_SPEC
 from fasthep_carpenter.operations.di_object_mass import DI_OBJECT_MASS_SPEC
 from fasthep_carpenter.operations.hist import HIST_SPEC
 from fasthep_carpenter.operations.project_fields import PROJECT_FIELDS_SPEC
+from fasthep_carpenter.operations.selection_flag import SELECTION_FLAG_SPEC
 from fasthep_carpenter.operations.weights.lookup_csv import LOOKUP_CSV_SPEC
 from fasthep_carpenter.operations.weights.pdf_envelope import PDF_ENVELOPE_SPEC
 
@@ -189,7 +190,11 @@ def test_clean_dependencies_expose_param_collection_references() -> None:
         "selected_electrons_eta",
         "selected_electrons_phi",
     }
-    assert deps.produces == {"cleaned_photons", "nremoved_photon_overlap"}
+    assert deps.produces == {
+        "cleaned_photons",
+        "ncleaned_photons",
+        "nremoved_photon_overlap",
+    }
 
 
 def test_clean_dependencies_require_source_sort_field_only_when_sorting() -> None:
@@ -243,8 +248,20 @@ def test_clean_dependencies_expand_collection_relative_fields() -> None:
         "cleaned_veto_Electron_eta",
         "cleaned_veto_Electron_phi",
         "cleaned_veto_Electron_miniPFRelIso_all",
+        "ncleaned_veto_Electron",
         "nremoved_veto_Electron_overlap",
     } <= deps.produces
+
+
+def test_selection_flag_uses_declarative_dependency_contract() -> None:
+    assert SELECTION_FLAG_SPEC["requires"] == {
+        "symbols": [{"from": "params.selection.*", "kind": "expr"}]
+    }
+    assert SELECTION_FLAG_SPEC["provides"] == {
+        "symbols": [{"from": "params.output", "kind": "field_list"}]
+    }
+    assert "dependency_parser" not in SELECTION_FLAG_SPEC
+    assert "dependencies" not in SELECTION_FLAG_SPEC
 
 
 def test_weight_operations_declarative_dependencies() -> None:

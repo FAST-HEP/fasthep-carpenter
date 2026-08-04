@@ -19,6 +19,7 @@ def test_clean_no_overlap_keeps_all_source_objects() -> None:
 
     assert ak.to_list(out["cleaned_src_eta"]) == [[0.0, 2.0]]
     assert ak.to_list(out["cleaned_src_pt"]) == [[10.0, 20.0]]
+    assert ak.to_list(out["ncleaned_src"]) == [2]
     assert ak.to_list(out["nremoved_cleaned_src"]) == [0]
 
 
@@ -35,6 +36,7 @@ def test_clean_one_overlapping_target_removes_source_object() -> None:
 
     assert ak.to_list(out["cleaned_src_eta"]) == [[2.0]]
     assert ak.to_list(out["cleaned_src_pt"]) == [[20.0]]
+    assert ak.to_list(out["ncleaned_src"]) == [1]
     assert ak.to_list(out["nremoved_cleaned_src"]) == [1]
 
 
@@ -58,6 +60,7 @@ def test_clean_multiple_targets_remove_on_any_overlap() -> None:
 
     assert ak.to_list(out["cleaned_src_eta"]) == [[0.0, 4.0]]
     assert ak.to_list(out["cleaned_src_pt"]) == [[10.0, 30.0]]
+    assert ak.to_list(out["ncleaned_src"]) == [2]
     assert ak.to_list(out["nremoved_cleaned_src"]) == [1]
 
 
@@ -73,6 +76,7 @@ def test_clean_empty_target_collection_removes_nothing() -> None:
     )
 
     assert ak.to_list(out["cleaned_src_eta"]) == [[0.0, 2.0]]
+    assert ak.to_list(out["ncleaned_src"]) == [2]
     assert ak.to_list(out["nremoved_cleaned_src"]) == [0]
 
 
@@ -88,6 +92,7 @@ def test_clean_empty_source_collection_is_valid() -> None:
     )
 
     assert ak.to_list(out["cleaned_src_eta"]) == [[]]
+    assert ak.to_list(out["ncleaned_src"]) == [0]
     assert ak.to_list(out["nremoved_cleaned_src"]) == [0]
 
 
@@ -103,6 +108,7 @@ def test_clean_multiple_events_stay_event_local() -> None:
     )
 
     assert ak.to_list(out["cleaned_src_eta"]) == [[0.0], []]
+    assert ak.to_list(out["ncleaned_src"]) == [1, 0]
     assert ak.to_list(out["nremoved_cleaned_src"]) == [0, 1]
 
 
@@ -215,6 +221,7 @@ def test_clean_supports_record_collection_output() -> None:
     assert ak.to_list(out["cleaned"]) == [
         [{"eta": 0.0, "phi": 0.0, "pt": 10.0, "tag": 1}]
     ]
+    assert ak.to_list(out["ncleaned"]) == [1]
 
 
 def _run(stream: dict, **params):

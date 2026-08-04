@@ -21,6 +21,10 @@ registry:
       spec: fasthep_carpenter.operations.cutflow:CUTFLOW_SPEC
       impl: fasthep_carpenter.operations.cutflow:run_cutflow_transform
 
+    hep.selection.flag:
+      spec: fasthep_carpenter.operations.selection_flag:SELECTION_FLAG_SPEC
+      impl: fasthep_carpenter.operations.selection_flag:run_selection_flag_transform
+
     hep.clean:
       spec: fasthep_carpenter.operations.clean:CLEAN_SPEC
       impl: fasthep_carpenter.operations.clean:run_clean_transform
