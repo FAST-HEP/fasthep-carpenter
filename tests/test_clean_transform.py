@@ -17,9 +17,9 @@ def test_clean_no_overlap_keeps_all_source_objects() -> None:
         }
     )
 
-    assert ak.to_list(out["events"]["cleaned_src_eta"]) == [[0.0, 2.0]]
-    assert ak.to_list(out["events"]["cleaned_src_pt"]) == [[10.0, 20.0]]
-    assert ak.to_list(out["events"]["nremoved_cleaned_src"]) == [0]
+    assert ak.to_list(out["cleaned_src_eta"]) == [[0.0, 2.0]]
+    assert ak.to_list(out["cleaned_src_pt"]) == [[10.0, 20.0]]
+    assert ak.to_list(out["nremoved_cleaned_src"]) == [0]
 
 
 def test_clean_one_overlapping_target_removes_source_object() -> None:
@@ -33,9 +33,9 @@ def test_clean_one_overlapping_target_removes_source_object() -> None:
         }
     )
 
-    assert ak.to_list(out["events"]["cleaned_src_eta"]) == [[2.0]]
-    assert ak.to_list(out["events"]["cleaned_src_pt"]) == [[20.0]]
-    assert ak.to_list(out["events"]["nremoved_cleaned_src"]) == [1]
+    assert ak.to_list(out["cleaned_src_eta"]) == [[2.0]]
+    assert ak.to_list(out["cleaned_src_pt"]) == [[20.0]]
+    assert ak.to_list(out["nremoved_cleaned_src"]) == [1]
 
 
 def test_clean_multiple_targets_remove_on_any_overlap() -> None:
@@ -56,9 +56,9 @@ def test_clean_multiple_targets_remove_on_any_overlap() -> None:
         min_delta_r=0.4,
     )
 
-    assert ak.to_list(out["events"]["cleaned_src_eta"]) == [[0.0, 4.0]]
-    assert ak.to_list(out["events"]["cleaned_src_pt"]) == [[10.0, 30.0]]
-    assert ak.to_list(out["events"]["nremoved_cleaned_src"]) == [1]
+    assert ak.to_list(out["cleaned_src_eta"]) == [[0.0, 4.0]]
+    assert ak.to_list(out["cleaned_src_pt"]) == [[10.0, 30.0]]
+    assert ak.to_list(out["nremoved_cleaned_src"]) == [1]
 
 
 def test_clean_empty_target_collection_removes_nothing() -> None:
@@ -72,8 +72,8 @@ def test_clean_empty_target_collection_removes_nothing() -> None:
         }
     )
 
-    assert ak.to_list(out["events"]["cleaned_src_eta"]) == [[0.0, 2.0]]
-    assert ak.to_list(out["events"]["nremoved_cleaned_src"]) == [0]
+    assert ak.to_list(out["cleaned_src_eta"]) == [[0.0, 2.0]]
+    assert ak.to_list(out["nremoved_cleaned_src"]) == [0]
 
 
 def test_clean_empty_source_collection_is_valid() -> None:
@@ -87,8 +87,8 @@ def test_clean_empty_source_collection_is_valid() -> None:
         }
     )
 
-    assert ak.to_list(out["events"]["cleaned_src_eta"]) == [[]]
-    assert ak.to_list(out["events"]["nremoved_cleaned_src"]) == [0]
+    assert ak.to_list(out["cleaned_src_eta"]) == [[]]
+    assert ak.to_list(out["nremoved_cleaned_src"]) == [0]
 
 
 def test_clean_multiple_events_stay_event_local() -> None:
@@ -102,8 +102,8 @@ def test_clean_multiple_events_stay_event_local() -> None:
         }
     )
 
-    assert ak.to_list(out["events"]["cleaned_src_eta"]) == [[0.0], []]
-    assert ak.to_list(out["events"]["nremoved_cleaned_src"]) == [0, 1]
+    assert ak.to_list(out["cleaned_src_eta"]) == [[0.0], []]
+    assert ak.to_list(out["nremoved_cleaned_src"]) == [0, 1]
 
 
 def test_clean_threshold_boundary_is_strictly_less_than_min_delta_r() -> None:
@@ -118,8 +118,8 @@ def test_clean_threshold_boundary_is_strictly_less_than_min_delta_r() -> None:
         min_delta_r=0.4,
     )
 
-    assert ak.to_list(out["events"]["cleaned_src_eta"]) == [[0.0]]
-    assert ak.to_list(out["events"]["nremoved_cleaned_src"]) == [1]
+    assert ak.to_list(out["cleaned_src_eta"]) == [[0.0]]
+    assert ak.to_list(out["nremoved_cleaned_src"]) == [1]
 
 
 def test_clean_preserves_target_fields_unchanged() -> None:
@@ -134,8 +134,8 @@ def test_clean_preserves_target_fields_unchanged() -> None:
         }
     )
 
-    assert ak.to_list(out["events"]["tgt_eta"]) == [[0.1]]
-    assert ak.to_list(out["events"]["tgt_label"]) == [[42]]
+    assert ak.to_list(out["tgt_eta"]) == [[0.1]]
+    assert ak.to_list(out["tgt_label"]) == [[42]]
 
 
 def test_clean_preserves_arbitrary_source_fields() -> None:
@@ -150,7 +150,7 @@ def test_clean_preserves_arbitrary_source_fields() -> None:
         }
     )
 
-    assert ak.to_list(out["events"]["cleaned_src_charge"]) == [[1]]
+    assert ak.to_list(out["cleaned_src_charge"]) == [[1]]
 
 
 def test_clean_sorts_descending_pt_when_requested() -> None:
@@ -166,7 +166,7 @@ def test_clean_sorts_descending_pt_when_requested() -> None:
         sort_order="descending",
     )
 
-    assert ak.to_list(out["events"]["cleaned_src_pt"]) == [[30.0, 20.0, 10.0]]
+    assert ak.to_list(out["cleaned_src_pt"]) == [[30.0, 20.0, 10.0]]
 
 
 def test_clean_removed_count_diagnostic_can_be_named() -> None:
@@ -181,8 +181,8 @@ def test_clean_removed_count_diagnostic_can_be_named() -> None:
         diagnostics={"removed_count": "nremoved_src_overlap"},
     )
 
-    assert ak.to_list(out["events"]["nremoved_src_overlap"]) == [1]
-    assert "nremoved_cleaned_src" not in out["events"].fields
+    assert ak.to_list(out["nremoved_src_overlap"]) == [1]
+    assert "nremoved_cleaned_src" not in out.fields
 
 
 def test_clean_missing_eta_phi_fails_clearly() -> None:
@@ -212,7 +212,7 @@ def test_clean_supports_record_collection_output() -> None:
         output="cleaned",
     )
 
-    assert ak.to_list(out["events"]["cleaned"]) == [
+    assert ak.to_list(out["cleaned"]) == [
         [{"eta": 0.0, "phi": 0.0, "pt": 10.0, "tag": 1}]
     ]
 

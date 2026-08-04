@@ -130,11 +130,25 @@ Example workflow snippet:
 ```yaml
 steps:
   - id: TightMuon
-    op: hep.select
+    op: hep.select_objects
     params:
       collection: Muon
-      mask: Muon_tightId
+      output: selected_tight_Muon
+      selection:
+        - pt >= 20
+        - abs(eta) <= 2.4
+      keep:
+        - pt
+        - eta
+        - phi
+        - mass
 ```
+
+`hep.select_objects` evaluates `selection` expressions relative to the input
+collection, keeps exactly the configured fields, emits `n<output>` as the
+selected-object count, and sorts selected objects by descending `pt` by default.
+Use `sort` to override the ordering or `sort: false` to preserve input order.
+Overlap removal is intentionally separate and belongs in `hep.clean`.
 
 ## Design principles
 

@@ -51,6 +51,7 @@ CLEAN_SPEC = {
         "sort_by": {"type": "string", "required": False},
         "sort_order": {"type": "string", "required": False, "default": "descending"},
         "diagnostics": {"type": "mapping", "required": False},
+        "fields": {"type": "list[string]", "required": False},
     },
     "result": {
         "kind": "event_stream",
@@ -82,6 +83,11 @@ def parse_clean_data_dependencies(
         },
         produces={output},
     )
+
+    fields = _collection_fields(params.get("fields"))
+    if fields:
+        result.consumes.update(f"{source}_{field}" for field in fields)
+        result.produces.update(f"{output}_{field}" for field in fields)
 
     sort_by = params.get("sort_by")
     if sort_by is not None:
@@ -216,9 +222,11 @@ def run_clean_transform(
     sort_by: str | None = None,
     sort_order: str = "descending",
     diagnostics: dict[str, Any] | bool | None = None,
-    ctx: dict[str, Any] | None = None,
+    fields: list[str] | None = None,
+    ctx: Any = None,
     **kwargs: Any,
-) -> dict[str, Any]:
+) -> Any:
+    del kwargs
     stream = unwrap_legacy_data_envelope(stream)
     legacy_params: dict[str, Any] = {
         "source": source,
@@ -234,14 +242,21 @@ def run_clean_transform(
         legacy_params["sort_by"] = sort_by
     if diagnostics is not None:
         legacy_params["diagnostics"] = diagnostics
+    if fields is not None:
+        legacy_params["fields"] = fields
 
     out = run_clean(
         data=legacy_data_envelope(stream),
         params=legacy_params,
         ctx=dict(ctx or {}),
-        **kwargs,
     )
-    return {"events": get_stream_array(out, DEFAULT_PRIMARY_STREAM_ID)}
+    if ctx is not None and hasattr(ctx, "provenance"):
+        deps = parse_clean_data_dependencies(legacy_params)
+        ctx.provenance.record_operation(
+            inputs={"symbols": sorted(deps.consumes)},
+            outputs={"symbols": sorted(deps.produces)},
+        )
+    return get_stream_array(out, DEFAULT_PRIMARY_STREAM_ID)
 
 
 class _Collection:
@@ -336,12 +351,24 @@ def _required_collection_name(value: Any, *, param: str) -> str:
 def _required_collection_field(value: Any, *, param: str) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(f"hep.clean {param} must be a non-empty field name")
-    if "_" in value:
+    field = value.strip()
+    if "." in field:
         raise ValueError(
             f"hep.clean {param}={value!r} should name a source collection field "
             "such as 'pt', not a full stream field"
         )
-    return value.strip()
+    return field
+
+
+def _collection_fields(value: Any) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list):
+        raise TypeError("hep.clean fields must be a list of collection field names")
+    fields = []
+    for item in value:
+        fields.append(_required_collection_field(item, param="fields"))
+    return fields
 
 
 def _keep_removed(params: dict[str, Any]) -> bool:

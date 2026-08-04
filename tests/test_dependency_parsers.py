@@ -217,6 +217,36 @@ def test_clean_dependencies_require_source_sort_field_only_when_sorting() -> Non
     assert "selected_photons_pt" in sorted_deps.consumes
 
 
+def test_clean_dependencies_expand_collection_relative_fields() -> None:
+    deps = _declarative_dependencies(
+        CLEAN_SPEC,
+        {
+            "source": "selected_veto_Electron",
+            "clean_against": ["selected_tight_Muon"],
+            "output": "cleaned_veto_Electron",
+            "fields": ["pt", "eta", "phi", "miniPFRelIso_all"],
+            "diagnostics": {"removed_count": "nremoved_veto_Electron_overlap"},
+        },
+    )
+
+    assert {
+        "selected_veto_Electron_pt",
+        "selected_veto_Electron_eta",
+        "selected_veto_Electron_phi",
+        "selected_veto_Electron_miniPFRelIso_all",
+        "selected_tight_Muon_eta",
+        "selected_tight_Muon_phi",
+    } <= deps.consumes
+    assert {
+        "cleaned_veto_Electron",
+        "cleaned_veto_Electron_pt",
+        "cleaned_veto_Electron_eta",
+        "cleaned_veto_Electron_phi",
+        "cleaned_veto_Electron_miniPFRelIso_all",
+        "nremoved_veto_Electron_overlap",
+    } <= deps.produces
+
+
 def test_weight_operations_declarative_dependencies() -> None:
     lookup = _declarative_dependencies(
         LOOKUP_CSV_SPEC,
