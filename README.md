@@ -173,6 +173,15 @@ collections. The candidate context exposes `pt`, `eta`, `phi`, `mass`, and
 operation preserves all surviving candidates and does not filter events; use
 `hep.selection.flag` on the count products for reusable event booleans.
 
+Use `hep.build_recoil` for transverse recoil candidates built from scalar MET
+and zero or more already aligned visible-object collections. It consumes
+`<met>_pt`, `<met>_phi`, and each visible collection's `pt`/`phi`, computes
+`MET + visible` transverse components, and writes configured recoil fields plus
+`n<output>`. Selection expressions are evaluated on the generated recoil fields
+such as `pt` and `phi`; they do not add source-branch dependencies. The default
+reduction records the count before reduction and keeps the highest-pt recoil
+candidate without filtering events.
+
 Use `hep.selection.flag` for event-level predicates that should be materialized
 as boolean fields without filtering events or producing cutflow counts. Its
 `selection` list is combined with logical AND and written to `output`; if

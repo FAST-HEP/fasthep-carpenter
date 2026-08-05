@@ -11,6 +11,7 @@ from fasthep_carpenter.operations.build_lepton_met_candidate import (
     BUILD_LEPTON_MET_CANDIDATE_SPEC,
 )
 from fasthep_carpenter.operations.build_pairs import BUILD_PAIRS_SPEC
+from fasthep_carpenter.operations.build_recoil import BUILD_RECOIL_SPEC
 from fasthep_carpenter.operations.clean import CLEAN_SPEC
 from fasthep_carpenter.operations.cms.match_l1t_jets import (
     CMS_MATCH_L1T_JETS_SPEC,
@@ -346,6 +347,35 @@ def test_build_lepton_met_candidate_dependencies_expand_params() -> None:
         "WFinder_singleElectron_jec_Nominal_lepton_charge",
         "nWFinder_singleElectron_jec_Nominal_W",
         "nWFinder_singleElectron_jec_Nominal_lepton",
+    }
+
+
+def test_build_recoil_dependencies_expand_params() -> None:
+    deps = _declarative_dependencies(
+        BUILD_RECOIL_SPEC,
+        {
+            "met": "jec_Nominal_TypeIPuppiMET",
+            "visible": ["diMuon_lepton_1", "diMuon_lepton_2"],
+            "output": "diMuon_CR_jec_Nominal_recoil",
+            "selection": ["pt >= 200"],
+            "keep": ["pt", "phi", "eta", "mass"],
+        },
+    )
+
+    assert deps.consumes == {
+        "jec_Nominal_TypeIPuppiMET_pt",
+        "jec_Nominal_TypeIPuppiMET_phi",
+        "diMuon_lepton_1_pt",
+        "diMuon_lepton_1_phi",
+        "diMuon_lepton_2_pt",
+        "diMuon_lepton_2_phi",
+    }
+    assert deps.produces == {
+        "diMuon_CR_jec_Nominal_recoil_pt",
+        "diMuon_CR_jec_Nominal_recoil_phi",
+        "diMuon_CR_jec_Nominal_recoil_eta",
+        "diMuon_CR_jec_Nominal_recoil_mass",
+        "ndiMuon_CR_jec_Nominal_recoil",
     }
 
 

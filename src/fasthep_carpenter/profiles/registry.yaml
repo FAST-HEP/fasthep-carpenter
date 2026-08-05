@@ -37,6 +37,10 @@ registry:
       spec: fasthep_carpenter.operations.build_lepton_met_candidate:BUILD_LEPTON_MET_CANDIDATE_SPEC
       impl: fasthep_carpenter.operations.build_lepton_met_candidate:run_build_lepton_met_candidate_transform
 
+    hep.build_recoil:
+      spec: fasthep_carpenter.operations.build_recoil:BUILD_RECOIL_SPEC
+      impl: fasthep_carpenter.operations.build_recoil:run_build_recoil_transform
+
     hep.select_objects:
       spec: fasthep_carpenter.operations.select_objects:SELECT_OBJECTS_SPEC
       impl: fasthep_carpenter.operations.select_objects:run_select_objects
