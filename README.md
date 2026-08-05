@@ -162,6 +162,17 @@ one candidate. It emits explicit flat output fields plus `n<output>_Z`; use
 `hep.di_object_mass` remains the simpler operation for a scalar mass from the
 first two objects in one collection.
 
+Use `hep.build_lepton_met_candidate` for single-lepton plus MET candidates. It
+consumes one lepton collection and one scalar MET product, evaluates lepton
+selection expressions relative to the lepton collection, broadcasts MET against
+all selected leptons, and writes aligned `<output>_W_*` and `<output>_lepton_*`
+collections. The candidate context exposes `pt`, `eta`, `phi`, `mass`, and
+`MT`, where `MT` is the transverse mass. Counts are explicit products:
+`n<output>_lepton` records the number of leptons after lepton selection, while
+`n<output>_W` records the number of candidates after candidate selection. The
+operation preserves all surviving candidates and does not filter events; use
+`hep.selection.flag` on the count products for reusable event booleans.
+
 Use `hep.selection.flag` for event-level predicates that should be materialized
 as boolean fields without filtering events or producing cutflow counts. Its
 `selection` list is combined with logical AND and written to `output`; if

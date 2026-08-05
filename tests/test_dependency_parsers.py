@@ -7,6 +7,9 @@ from hepflow.compiler.data_flow import (
     parse_component_data_dependencies,
 )
 
+from fasthep_carpenter.operations.build_lepton_met_candidate import (
+    BUILD_LEPTON_MET_CANDIDATE_SPEC,
+)
 from fasthep_carpenter.operations.build_pairs import BUILD_PAIRS_SPEC
 from fasthep_carpenter.operations.clean import CLEAN_SPEC
 from fasthep_carpenter.operations.cms.match_l1t_jets import (
@@ -300,6 +303,49 @@ def test_build_pairs_dependencies_expand_collections_expressions_and_outputs() -
         "diMuon_lepton_2_mass",
         "diMuon_lepton_2_charge",
         "diMuon_lepton_2_tag",
+    }
+
+
+def test_build_lepton_met_candidate_dependencies_expand_params() -> None:
+    deps = _declarative_dependencies(
+        BUILD_LEPTON_MET_CANDIDATE_SPEC,
+        {
+            "lepton": "selected_tight_Electron",
+            "met": "jec_Nominal_TypeIPuppiMET",
+            "output": "WFinder_singleElectron_jec_Nominal",
+            "selection": {
+                "lepton": ["pt >= 40"],
+                "candidate": ["MT >= 0", "MT <= 160"],
+            },
+            "keep": {
+                "candidate": ["pt", "eta", "phi", "mass", "MT"],
+                "lepton": ["pt", "eta", "phi", "mass", "charge"],
+            },
+        },
+    )
+
+    assert deps.consumes == {
+        "selected_tight_Electron_pt",
+        "selected_tight_Electron_eta",
+        "selected_tight_Electron_phi",
+        "selected_tight_Electron_mass",
+        "selected_tight_Electron_charge",
+        "jec_Nominal_TypeIPuppiMET_pt",
+        "jec_Nominal_TypeIPuppiMET_phi",
+    }
+    assert deps.produces == {
+        "WFinder_singleElectron_jec_Nominal_W_pt",
+        "WFinder_singleElectron_jec_Nominal_W_eta",
+        "WFinder_singleElectron_jec_Nominal_W_phi",
+        "WFinder_singleElectron_jec_Nominal_W_mass",
+        "WFinder_singleElectron_jec_Nominal_W_MT",
+        "WFinder_singleElectron_jec_Nominal_lepton_pt",
+        "WFinder_singleElectron_jec_Nominal_lepton_eta",
+        "WFinder_singleElectron_jec_Nominal_lepton_phi",
+        "WFinder_singleElectron_jec_Nominal_lepton_mass",
+        "WFinder_singleElectron_jec_Nominal_lepton_charge",
+        "nWFinder_singleElectron_jec_Nominal_W",
+        "nWFinder_singleElectron_jec_Nominal_lepton",
     }
 
 
