@@ -4,13 +4,16 @@ import ast
 from typing import Any
 
 import awkward as ak
-from hepflow.compiler.expr_symbols import PYTHON_CONSTANT_SYMBOLS, symbols_in_expr
-from hepflow.model.data_flow import DataDependencyResult
+from hepflow.compiler.data_flow import (
+    DependencyContext,
+    parse_component_data_dependencies,
+)
+from hepflow.compiler.expr_symbols import data_symbols_in_expr
+from hepflow.registry.defaults import default_expr_registry
 from hepflow.runtime import ComponentContext
 from hepflow.runtime.engine import eval_expr
 
 DEFAULT_SORT = {"by": "pt", "order": "descending"}
-DEFAULT_FUNCTIONS = {"abs", "cosh", "exp", "log", "log10", "sqrt", "where"}
 
 
 SELECT_OBJECTS_SPEC = {
@@ -32,44 +35,45 @@ SELECT_OBJECTS_SPEC = {
         "kind": "event_stream",
         "description": "Event stream with a selected object collection.",
     },
-    "dependency_parser": (
-        "fasthep_carpenter.operations.select_objects:"
-        "parse_select_objects_dependencies"
-    ),
+    "requires": {
+        "symbols": [
+            {
+                "from": "params.collection",
+                "kind": "field_prefix",
+                "suffixes_from": "params.keep",
+                "exclude_suffixes_from": "params.derived",
+            },
+            {
+                "from": "params.selection",
+                "kind": "relative_expr",
+                "prefix_from": "params.collection",
+            },
+            {
+                "from": "params.derived.*",
+                "kind": "relative_expr",
+                "prefix_from": "params.collection",
+            },
+            {
+                "from": "params.collection",
+                "kind": "field_prefix",
+                "suffixes_from": "params.sort.by",
+                "exclude_suffixes_from": "params.derived",
+                "skip_if_false": "params.sort",
+                "optional": True,
+            },
+        ]
+    },
+    "provides": {
+        "symbols": [
+            {
+                "from": "params.output",
+                "kind": "field_prefix",
+                "suffixes_from": "params.keep",
+            },
+            {"from": "params.output", "kind": "count"},
+        ]
+    },
 }
-
-
-def parse_select_objects_dependencies(
-    params: dict[str, Any],
-    *,
-    known_functions: set[str],
-    known_constants: set[str],
-    context_symbols: set[str],
-) -> DataDependencyResult:
-    collection = _required_name(params.get("collection"), "collection")
-    output = _required_name(params.get("output"), "output")
-    keep = _field_names(params.get("keep"), "keep")
-    derived = _derived_expressions(params.get("derived"))
-    selection = _selection_expressions(params.get("selection"))
-    sort_field = _sort_field(params.get("sort", DEFAULT_SORT))
-
-    consumed_fields = set(keep) - set(derived)
-    if sort_field is not None and sort_field not in derived:
-        consumed_fields.add(sort_field)
-    for expression in [*selection, *derived.values()]:
-        consumed_fields.update(
-            _relative_symbols(
-                expression,
-                known_functions=known_functions,
-                known_constants=known_constants,
-                context_symbols=context_symbols,
-            )
-        )
-
-    return DataDependencyResult(
-        consumes={f"{collection}_{field}" for field in consumed_fields},
-        produces={f"n{output}", *(f"{output}_{field}" for field in keep)},
-    )
 
 
 def run_select_objects(
@@ -93,21 +97,16 @@ def run_select_objects(
     sort_cfg = _normalise_sort(sort)
     sort_field = _sort_field(sort_cfg)
 
-    input_fields = sorted(
-        parse_select_objects_dependencies(
-            {
-                "collection": collection_name,
-                "output": output_name,
-                "selection": selection_exprs,
-                "keep": keep_fields,
-                "derived": derived_exprs,
-                "sort": sort_cfg,
-            },
-            known_functions=DEFAULT_FUNCTIONS,
-            known_constants=set(),
-            context_symbols=set(),
-        ).consumes
-    )
+    runtime_params = {
+        "collection": collection_name,
+        "output": output_name,
+        "selection": selection_exprs,
+        "keep": keep_fields,
+        "derived": derived_exprs,
+        "sort": sort_cfg,
+    }
+    deps = _dependencies(runtime_params)
+    input_fields = sorted(deps.consumes)
     for input_field in input_fields:
         _field(stream, input_field)
 
@@ -165,7 +164,7 @@ def run_select_objects(
     if ctx is not None:
         ctx.provenance.record_operation(
             inputs={"symbols": input_fields},
-            outputs={"symbols": selected_output_fields(output_name, keep_fields)},
+            outputs={"symbols": sorted(deps.produces)},
         )
     return out
 
@@ -179,18 +178,20 @@ def selected_output_fields(output: str, keep: list[str]) -> list[str]:
 def resolve_collection_expression(expression: str, *, collection: str) -> str:
     collection_name = _required_name(collection, "collection")
     expression_text = str(expression).strip()
-    relative = _relative_symbols(
+    registry = default_expr_registry()
+    relative_fields = data_symbols_in_expr(
         expression_text,
-        known_functions=DEFAULT_FUNCTIONS,
-        known_constants=set(),
+        known_functions=set(registry.functions),
+        known_constants=set(registry.constants),
         context_symbols=set(),
+        produced=set(),
     )
     tree = ast.parse(
         expression_text.replace("&&", " and ").replace("||", " or "),
         mode="eval",
     )
     rewritten = _CollectionExpressionRewriter(
-        {field: f"{collection_name}_{field}" for field in relative}
+        {field: f"{collection_name}_{field}" for field in relative_fields}
     ).visit(tree)
     ast.fix_missing_locations(rewritten)
     return ast.unparse(rewritten)
@@ -221,21 +222,6 @@ def _mask_like_field(
     if input_fields:
         return _field(stream, input_fields[0])
     raise ValueError("hep.select_objects requires at least one concrete input field")
-
-
-def _relative_symbols(
-    expression: str,
-    *,
-    known_functions: set[str],
-    known_constants: set[str],
-    context_symbols: set[str],
-) -> set[str]:
-    symbols = symbols_in_expr(expression)
-    symbols -= set(known_functions)
-    symbols -= set(known_constants)
-    symbols -= set(context_symbols)
-    symbols -= PYTHON_CONSTANT_SYMBOLS
-    return symbols
 
 
 def _selection_expressions(value: Any) -> list[str]:
@@ -326,10 +312,22 @@ def _field(stream: Any, name: str) -> Any:
     return stream[name]
 
 
+def _dependencies(params: dict[str, Any]):
+    registry = default_expr_registry()
+    return parse_component_data_dependencies(
+        spec=SELECT_OBJECTS_SPEC,
+        params=params,
+        dep_ctx=DependencyContext(
+            known_functions=set(registry.functions),
+            known_constants=set(registry.constants),
+            context_symbols=set(),
+        ),
+    )
+
+
 __all__ = [
     "DEFAULT_SORT",
     "SELECT_OBJECTS_SPEC",
-    "parse_select_objects_dependencies",
     "resolve_collection_expression",
     "run_select_objects",
     "selected_output_fields",

@@ -87,6 +87,46 @@ def test_selection_flag_records_runtime_provenance() -> None:
     ]
 
 
+def test_selection_flag_supports_multiple_independent_vetoes() -> None:
+    stream = ak.Array(
+        {
+            "nselected_tight_Muon": [0, 1, 0],
+            "ncleaned_loose_Tau": [0, 0, 2],
+        }
+    )
+
+    out = run_selection_flag_transform(
+        stream=stream,
+        selection=["nselected_tight_Muon == 0"],
+        output="tight_Muon_veto_selection",
+    )
+    out = run_selection_flag_transform(
+        stream=out,
+        selection=["ncleaned_loose_Tau == 0"],
+        output="loose_Tau_veto_selection",
+    )
+
+    assert ak.to_list(out["tight_Muon_veto_selection"]) == [True, False, True]
+    assert ak.to_list(out["loose_Tau_veto_selection"]) == [True, True, False]
+    assert ak.to_list(out["nselected_tight_Muon"]) == [0, 1, 0]
+    assert ak.to_list(out["ncleaned_loose_Tau"]) == [0, 0, 2]
+
+
+def test_selection_flag_can_consume_previous_boolean_flag() -> None:
+    out = run_selection_flag_transform(
+        stream=ak.Array({"ncleaned_veto_Electron": [0, 1]}),
+        selection=["ncleaned_veto_Electron == 0"],
+        output="veto_Electron_veto_selection",
+    )
+    out = run_selection_flag_transform(
+        stream=out,
+        selection=["veto_Electron_veto_selection"],
+        output="downstream_selection",
+    )
+
+    assert ak.to_list(out["downstream_selection"]) == [True, False]
+
+
 class _Provenance:
     def __init__(self) -> None:
         self.records: list[dict] = []

@@ -2,8 +2,8 @@
 
 `hep.clean` removes objects from one source collection when they overlap any
 object in one or more target collections. Collection references live inside
-operation params (`source` and `clean_against`); the `CLEAN_SPEC` dependency
-parser expands those references into planner-visible field requirements.
+operation params (`source` and `clean_against`); `CLEAN_SPEC` expands those
+references declaratively into planner-visible field requirements.
 
 The first supported metric is `delta_r`, evaluated from each collection's
 `eta` and `phi` fields using Awkward arrays and vector behavior. Optional
@@ -20,8 +20,12 @@ from typing import Any
 
 import awkward as ak
 import vector
-from hepflow.model.data_flow import DataDependencyResult
+from hepflow.compiler.data_flow import (
+    DependencyContext,
+    parse_component_data_dependencies,
+)
 from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
+from hepflow.registry.defaults import default_expr_registry
 
 from fasthep_carpenter.runtime.compat import (
     legacy_data_envelope,
@@ -60,48 +64,56 @@ CLEAN_SPEC = {
             "angular-overlap removal."
         ),
     },
-    "dependency_parser": (
-        "fasthep_carpenter.operations.clean:parse_clean_data_dependencies"
-    ),
+    "normalize_params": {
+        "defaults": True,
+        "param_templates": {"output": "cleaned_{source}"},
+    },
+    "requires": {
+        "symbols": [
+            {"from": "params.source", "kind": "field_prefix", "suffixes": ["eta", "phi"]},
+            {
+                "from": "params.clean_against",
+                "kind": "field_prefix",
+                "suffixes": ["eta", "phi"],
+            },
+            {
+                "from": "params.source",
+                "kind": "field_prefix",
+                "suffixes_from": "params.fields",
+                "optional": True,
+            },
+            {
+                "from": "params.source",
+                "kind": "field_prefix",
+                "suffixes_from": "params.sort_by",
+                "optional": True,
+            },
+        ]
+    },
+    "provides": {
+        "symbols": [
+            {"from": "params.output", "kind": "field_list"},
+            {
+                "from": "params.output",
+                "kind": "field_prefix",
+                "suffixes_from": "params.fields",
+                "optional": True,
+            },
+            {"from": "params.output", "kind": "count"},
+            {
+                "kind": "template",
+                "from": "params.diagnostics.removed_count",
+                "template": "nremoved_{params.output}",
+                "unless_false": "params.diagnostics",
+            },
+            {
+                "kind": "template",
+                "template": "{params.output}_removed",
+                "when_true": "params.diagnostics.keep_removed",
+            },
+        ]
+    },
 }
-
-
-def parse_clean_data_dependencies(
-    params: dict[str, Any],
-    **_: Any,
-) -> DataDependencyResult:
-    source = _required_collection_name(params.get("source"), param="source")
-    targets = _target_collection_names(params.get("clean_against"))
-    output = clean_output_name(params)
-
-    result = DataDependencyResult(
-        consumes={
-            f"{source}_eta",
-            f"{source}_phi",
-            *(f"{target}_eta" for target in targets),
-            *(f"{target}_phi" for target in targets),
-        },
-        produces={output, f"n{output}"},
-    )
-
-    fields = _collection_fields(params.get("fields"))
-    if fields:
-        result.consumes.update(f"{source}_{field}" for field in fields)
-        result.produces.update(f"{output}_{field}" for field in fields)
-
-    sort_by = params.get("sort_by")
-    if sort_by is not None:
-        sort_field = _required_collection_field(sort_by, param="sort_by")
-        result.consumes.add(f"{source}_{sort_field}")
-
-    removed_count = clean_removed_count_name(params)
-    if removed_count is not None:
-        result.produces.add(removed_count)
-
-    if _keep_removed(params):
-        result.produces.add(f"{output}_removed")
-
-    return result
 
 
 def clean_output_name(params: dict[str, Any]) -> str:
@@ -245,6 +257,7 @@ def run_clean_transform(
         legacy_params["diagnostics"] = diagnostics
     if fields is not None:
         legacy_params["fields"] = fields
+    legacy_params.setdefault("output", clean_output_name(legacy_params))
 
     out = run_clean(
         data=legacy_data_envelope(stream),
@@ -252,7 +265,7 @@ def run_clean_transform(
         ctx=dict(ctx or {}),
     )
     if ctx is not None and hasattr(ctx, "provenance"):
-        deps = parse_clean_data_dependencies(legacy_params)
+        deps = _dependencies(legacy_params)
         ctx.provenance.record_operation(
             inputs={"symbols": sorted(deps.consumes)},
             outputs={"symbols": sorted(deps.produces)},
@@ -377,3 +390,16 @@ def _keep_removed(params: dict[str, Any]) -> bool:
     if not isinstance(diagnostics, dict):
         return False
     return bool(diagnostics.get("keep_removed", False))
+
+
+def _dependencies(params: dict[str, Any]):
+    registry = default_expr_registry()
+    return parse_component_data_dependencies(
+        spec=CLEAN_SPEC,
+        params=params,
+        dep_ctx=DependencyContext(
+            known_functions=set(registry.functions),
+            known_constants=set(registry.constants),
+            context_symbols=set(),
+        ),
+    )

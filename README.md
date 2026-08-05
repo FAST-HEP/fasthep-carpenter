@@ -150,6 +150,18 @@ selected-object count, and sorts selected objects by descending `pt` by default.
 Use `sort` to override the ordering or `sort: false` to preserve input order.
 Overlap removal is intentionally separate and belongs in `hep.clean`.
 
+Use `hep.build_pairs` when an analysis needs explicit pair-candidate products
+rather than a first-two-object scalar mass. The operation accepts one or more
+input collections, concatenates them in declared order, forms all unordered
+pairs, evaluates pair expressions in a `lepton_1_<field>` /
+`lepton_2_<field>` context, builds candidate four-vectors, evaluates candidate
+expressions in a `pt`/`eta`/`phi`/`mass` context, and can stably sort the
+candidate and aligned constituent collections without choosing or truncating to
+one candidate. It emits explicit flat output fields plus `n<output>_Z`; use
+`hep.selection.flag` on that count when a reusable event flag is needed.
+`hep.di_object_mass` remains the simpler operation for a scalar mass from the
+first two objects in one collection.
+
 Use `hep.selection.flag` for event-level predicates that should be materialized
 as boolean fields without filtering events or producing cutflow counts. Its
 `selection` list is combined with logical AND and written to `output`; if

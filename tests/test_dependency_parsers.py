@@ -7,6 +7,7 @@ from hepflow.compiler.data_flow import (
     parse_component_data_dependencies,
 )
 
+from fasthep_carpenter.operations.build_pairs import BUILD_PAIRS_SPEC
 from fasthep_carpenter.operations.clean import CLEAN_SPEC
 from fasthep_carpenter.operations.cms.match_l1t_jets import (
     CMS_MATCH_L1T_JETS_SPEC,
@@ -251,6 +252,55 @@ def test_clean_dependencies_expand_collection_relative_fields() -> None:
         "ncleaned_veto_Electron",
         "nremoved_veto_Electron_overlap",
     } <= deps.produces
+
+
+def test_build_pairs_dependencies_expand_collections_expressions_and_outputs() -> None:
+    deps = _declarative_dependencies(
+        BUILD_PAIRS_SPEC,
+        {
+            "collections": ["selected_tight_Muon", "cleaned_CRloose_Muon"],
+            "output": "diMuon",
+            "selection": {
+                "pair": [
+                    "lepton_1_charge * lepton_2_charge < 0",
+                    "lepton_1_pt >= 20",
+                    "lepton_2_pt >= 10",
+                ],
+                "candidate": ["pt >= 20", "abs(eta) <= 2.4", "mass > 60"],
+            },
+            "sort": {"by": "abs(mass - 91)", "order": "ascending"},
+            "keep": {
+                "candidate": ["pt", "eta", "phi", "mass"],
+                "constituents": ["pt", "eta", "phi", "mass", "charge", "tag"],
+            },
+        },
+        known_functions={"abs"},
+    )
+
+    assert deps.consumes == {
+        f"{collection}_{field}"
+        for collection in ("selected_tight_Muon", "cleaned_CRloose_Muon")
+        for field in ("pt", "eta", "phi", "mass", "charge", "tag")
+    }
+    assert deps.produces == {
+        "ndiMuon_Z",
+        "diMuon_Z_pt",
+        "diMuon_Z_eta",
+        "diMuon_Z_phi",
+        "diMuon_Z_mass",
+        "diMuon_lepton_1_pt",
+        "diMuon_lepton_1_eta",
+        "diMuon_lepton_1_phi",
+        "diMuon_lepton_1_mass",
+        "diMuon_lepton_1_charge",
+        "diMuon_lepton_1_tag",
+        "diMuon_lepton_2_pt",
+        "diMuon_lepton_2_eta",
+        "diMuon_lepton_2_phi",
+        "diMuon_lepton_2_mass",
+        "diMuon_lepton_2_charge",
+        "diMuon_lepton_2_tag",
+    }
 
 
 def test_selection_flag_uses_declarative_dependency_contract() -> None:
