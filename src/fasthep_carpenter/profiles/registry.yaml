@@ -29,6 +29,10 @@ registry:
       spec: fasthep_carpenter.operations.clean:CLEAN_SPEC
       impl: fasthep_carpenter.operations.clean:run_clean_transform
 
+    hep.build_pairs:
+      spec: fasthep_carpenter.operations.build_pairs:BUILD_PAIRS_SPEC
+      impl: fasthep_carpenter.operations.build_pairs:run_build_pairs_transform
+
     hep.select_objects:
       spec: fasthep_carpenter.operations.select_objects:SELECT_OBJECTS_SPEC
       impl: fasthep_carpenter.operations.select_objects:run_select_objects
