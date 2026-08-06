@@ -27,7 +27,9 @@ HIST_SPEC = {
         "variations": {"type": "mapping", "required": False},
         "storage": {"type": "string", "required": False, "default": "count"},
     },
-    "result": {"kind": "histogram", "description": "Filled histogram object."},
+    "result": {
+        "hist": {"kind": "histogram", "description": "Filled histogram object."}
+    },
     "requires": {
         "symbols": [
             {
