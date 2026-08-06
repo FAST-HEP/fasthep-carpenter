@@ -34,6 +34,12 @@ def test_load_one_spec_and_impl_object() -> None:
 def test_root_tree_writer_declares_keep_requirements() -> None:
     spec = load_object("fasthep_carpenter.sinks.root_tree:ROOT_TREE_WRITE_SPEC")
 
+    assert spec["params"]["format"] == {
+        "type": "string",
+        "required": False,
+        "default": "rntuple",
+        "allowed": ["rntuple", "ttree"],
+    }
     assert spec["requires"] == {
         "symbols": [
             {

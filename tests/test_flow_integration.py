@@ -162,6 +162,8 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
         "node_id": "write.DerivedValue.0",
         "input_node": "stage.DerivedValue",
         "tree": "events",
+        "format": "rntuple",
+        "root_classname": "ROOT::RNTuple",
         "total_entries": 3,
         "datasets": {
             "sample": {
@@ -175,6 +177,8 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
                         "attempt": 0,
                         "entries": 2,
                         "size_bytes": output_path.stat().st_size,
+                        "format": "rntuple",
+                        "root_classname": "ROOT::RNTuple",
                     },
                     {
                         "path": "artifacts/files/skim/sample/0_1.root",
@@ -184,6 +188,8 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
                         "attempt": 0,
                         "entries": 1,
                         "size_bytes": second_output_path.stat().st_size,
+                        "format": "rntuple",
+                        "root_classname": "ROOT::RNTuple",
                     },
                 ],
             }

@@ -18,6 +18,12 @@ ROOT_TREE_WRITE_SPEC = {
         "path": {"type": "string", "required": True},
         "tree": {"type": "string", "required": False, "default": "events"},
         "keep": {"type": "list[string]", "required": False, "default": None},
+        "format": {
+            "type": "string",
+            "required": False,
+            "default": "rntuple",
+            "allowed": ["rntuple", "ttree"],
+        },
         "compression": {
             "type": "string",
             "required": False,
@@ -34,7 +40,7 @@ ROOT_TREE_WRITE_SPEC = {
     },
     "result": {
         "kind": "artifact",
-        "description": "A written ROOT file containing a TTree.",
+        "description": "A written ROOT file containing an RNTuple or TTree.",
     },
     "requires": {
         "symbols": [
@@ -53,6 +59,7 @@ def run_root_tree_write(
     path: str,
     tree: str = "events",
     keep: list[str] | None = None,
+    format: str = "rntuple",
     compression: str = "zlib",
     compression_level: int = 1,
     mode: str = "recreate",
@@ -60,7 +67,7 @@ def run_root_tree_write(
     meta: dict[str, Any] | None = None,
 ) -> OutputResult:
     """
-    Write an event-like stream to a ROOT TTree.
+    Write an event-like stream to a ROOT RNTuple or TTree.
 
     Initial assumptions:
       - target is awkward.Array or dict[str, array-like]
@@ -72,6 +79,7 @@ def run_root_tree_write(
             f"Unsupported mode for root_tree writer: {mode!r}. "
             "Only 'recreate' is currently supported."
         )
+    output_format = _normalise_format(format)
 
     array = _normalise_target(unwrap_legacy_data_envelope(target))
 
@@ -91,13 +99,20 @@ def run_root_tree_write(
     payload = {field: array[field] for field in array.fields}
 
     with uproot.recreate(output_path, compression=compression_arg) as fout:
-        fout[tree] = payload
+        if output_format == "rntuple":
+            fout.mkrntuple(tree, payload)
+        elif output_format == "ttree":
+            fout.mktree(tree, payload)
+
+    root_classname = _root_classname(output_path, tree)
 
     entries = _safe_len(array)
     manifest_record = _manifest_record(
         output_path=output_path,
         entries=entries,
         tree=tree,
+        output_format=output_format,
+        root_classname=root_classname,
         ctx=dict(ctx or {}),
         meta=dict(meta or {}),
     )
@@ -108,6 +123,8 @@ def run_root_tree_write(
         format="root",
         metadata={
             "tree": tree,
+            "format": output_format,
+            "root_classname": root_classname,
             "entries": entries,
             "branches": list(array.fields),
             "compression": compression,
@@ -122,6 +139,8 @@ def _manifest_record(
     output_path: Path,
     entries: int | None,
     tree: str,
+    output_format: str,
+    root_classname: str,
     ctx: dict[str, Any],
     meta: dict[str, Any],
 ) -> dict[str, Any]:
@@ -136,6 +155,8 @@ def _manifest_record(
         "node_id": str(meta.get("node_id") or ""),
         "input_node": str(meta.get("input_node") or ""),
         "tree": tree,
+        "format": output_format,
+        "root_classname": root_classname,
         "path": path,
         "path_type": path_type,
         "dataset": str(ctx.get("dataset_name") or partition.get("dataset") or "dataset"),
@@ -186,6 +207,21 @@ def _resolve_compression(name: str, level: int) -> Any:
         return uproot.ZSTD(level)
 
     raise ValueError(f"Unsupported ROOT compression algorithm: {name!r}")
+
+
+def _normalise_format(name: str) -> str:
+    output_format = str(name).strip().lower()
+    if output_format in {"rntuple", "ttree"}:
+        return output_format
+    raise ValueError(
+        f"Unsupported ROOT output format: {name!r}. "
+        "Expected one of 'rntuple' or 'ttree'."
+    )
+
+
+def _root_classname(path: Path, tree: str) -> str:
+    with uproot.open(path) as root_file:
+        return str(root_file[tree].classname)
 
 
 def _safe_len(array: ak.Array) -> int | None:
