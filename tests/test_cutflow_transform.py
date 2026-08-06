@@ -166,3 +166,41 @@ def test_cutflow_runtime_wrapper_ignores_metadata_kwargs() -> None:
     )
 
     assert ak.to_list(out["stream"]["Noise_filter_selection"]) == [True, False]
+
+
+def test_cutflow_runtime_wrapper_records_symbol_provenance() -> None:
+    class Recorder:
+        def __init__(self) -> None:
+            self.operations: list[dict[str, Any]] = []
+
+        def record_operation(self, **kwargs: Any) -> None:
+            self.operations.append(kwargs)
+
+    class RuntimeContext(dict[str, Any]):
+        @property
+        def provenance(self) -> Recorder:
+            return self["provenance"]
+
+    events = ak.Array(
+        {
+            "Flag_A": [True, False, False],
+            "Flag_B": [False, True, False],
+        }
+    )
+    recorder = Recorder()
+    ctx = RuntimeContext({"provenance": recorder})
+
+    run_cutflow_transform(
+        stream=events,
+        selection={"FilterRecoil_selection": ["(Flag_A) | (Flag_B)"]},
+        output_field="FilterRecoil_selection",
+        filter=True,
+        ctx=ctx,
+    )
+
+    assert recorder.operations == [
+        {
+            "inputs": {"symbols": ["Flag_A", "Flag_B"]},
+            "outputs": {"symbols": ["FilterRecoil_selection"]},
+        }
+    ]

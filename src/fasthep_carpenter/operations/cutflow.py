@@ -7,6 +7,7 @@ import numpy as np
 from hepflow.compiler.expr_symbols import data_symbols_in_expr
 from hepflow.model.data_flow import DataDependencyResult
 from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
+from hepflow.registry.defaults import default_expr_registry
 from hepflow.runtime.engine import eval_expr
 
 from fasthep_carpenter.runtime.compat import (
@@ -159,10 +160,32 @@ def run_cutflow_transform(
         params=legacy_params,
         ctx=legacy_ctx,
     )
+    if ctx is not None and hasattr(ctx, "provenance"):
+        deps = _runtime_dependencies(legacy_params, dict(ctx or {}))
+        output_symbols = []
+        if output_field:
+            output_symbols.append(str(output_field))
+        ctx.provenance.record_operation(
+            inputs={"symbols": sorted(deps.consumes)},
+            outputs={"symbols": output_symbols},
+        )
     return {
         "stream": out[DEFAULT_PRIMARY_STREAM_ID],
         "cutflow": out["cutflow"],
     }
+
+
+def _runtime_dependencies(
+    params: dict[str, Any],
+    ctx: dict[str, Any],
+) -> DataDependencyResult:
+    registry = ctx.get("expr_registry") or default_expr_registry()
+    return parse_cutflow_column_dependencies(
+        params,
+        known_functions=set(getattr(registry, "functions", {})),
+        known_constants=set(getattr(registry, "constants", {})),
+        context_symbols=set(ctx),
+    )
 
 
 def _selection_groups(selection: Any) -> list[tuple[str, list[Any], list[str]]]:
