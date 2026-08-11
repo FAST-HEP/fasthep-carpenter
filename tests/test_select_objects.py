@@ -246,7 +246,7 @@ def test_records_operation_provenance() -> None:
 def test_normalized_and_compiled_config_materialize_default_sort(
     tmp_path: Path,
 ) -> None:
-    author = {
+    workflow = {
         "version": "1.0",
         "registry": {
             "transforms": {
@@ -278,21 +278,21 @@ def test_normalized_and_compiled_config_materialize_default_sort(
             ]
         },
     }
-    author_path = tmp_path / "author.yaml"
-    author_path.write_text(yaml.safe_dump(author, sort_keys=False), encoding="utf-8")
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow_path.write_text(yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8")
 
     try:
         api_module = import_module("hepflow.api")
     except ModuleNotFoundError as exc:
         pytest.skip(f"installed hepflow integration dependencies are unavailable: {exc}")
-    normalise_author_file = api_module.normalise_author_file
+    normalise_workflow_file = api_module.normalise_workflow_file
 
     plan_module = import_module("hepflow.compiler.plan")
     build_plan_from_normalized = getattr(plan_module, "build_plan_from_normalized", None)
     if build_plan_from_normalized is None:
         pytest.skip("installed hepflow does not expose build_plan_from_normalized")
 
-    normalized = normalise_author_file(author_path, outdir=tmp_path / "build")
+    normalized = normalise_workflow_file(workflow_path, outdir=tmp_path / "build")
     _graph, plan = build_plan_from_normalized(normalized)
     params = normalized["analysis"]["stages"][0]["params"]
 

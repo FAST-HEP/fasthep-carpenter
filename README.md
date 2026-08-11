@@ -185,7 +185,7 @@ candidate without filtering events.
 Use `hep.selection.flag` for event-level predicates that should be materialized
 as boolean fields without filtering events or producing cutflow counts. Its
 `selection` list is combined with logical AND and written to `output`; if
-`output` is omitted, author normalization fills it from the exact stage id.
+`output` is omitted, workflow normalization fills it from the exact stage id.
 Expressions operate on event products directly, so object-count predicates
 should reference the conventional count field, for example
 `ncleaned_veto_Electron == 0`.

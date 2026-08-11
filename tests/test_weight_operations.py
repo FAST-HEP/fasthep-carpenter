@@ -4,7 +4,7 @@ from pathlib import Path
 
 import awkward as ak
 import yaml
-from hepflow.api import compile_author_file
+from hepflow.api import compile_workflow_file
 from hepflow.registry.loaders import load_object
 from hepflow.utils import read_yaml
 
@@ -94,8 +94,8 @@ def test_weight_outputs_can_be_used_by_systematic_weight_multiply(
         ),
         encoding="utf-8",
     )
-    author_path = tmp_path / "author.yaml"
-    author = {
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow = {
         "version": "1.0",
         "use": {"profiles": ["registry", "fasthep_carpenter:registry"]},
         "data": {"datasets": [], "defaults": {}},
@@ -157,9 +157,9 @@ def test_weight_outputs_can_be_used_by_systematic_weight_multiply(
             ],
         },
     }
-    author_path.write_text(yaml.safe_dump(author, sort_keys=False), encoding="utf-8")
+    workflow_path.write_text(yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8")
 
-    compile_author_file(author_path, outdir=tmp_path / "build")
+    compile_workflow_file(workflow_path, outdir=tmp_path / "build")
 
     plan = read_yaml(tmp_path / "build" / "compile" / "trigger_eff_up" / "plan.yaml")
     hist_node = next(node for node in plan["nodes"] if node["id"] == "stage.WeightedHist")
@@ -169,8 +169,8 @@ def test_weight_outputs_can_be_used_by_systematic_weight_multiply(
 
 
 def test_minimal_workflow_compiles_with_pdf_envelope(tmp_path: Path) -> None:
-    author_path = tmp_path / "author.yaml"
-    author = {
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow = {
         "version": "1.0",
         "use": {"profiles": ["registry", "fasthep_carpenter:registry"]},
         "data": {"datasets": [], "defaults": {}},
@@ -197,8 +197,8 @@ def test_minimal_workflow_compiles_with_pdf_envelope(tmp_path: Path) -> None:
             ]
         },
     }
-    author_path.write_text(yaml.safe_dump(author, sort_keys=False), encoding="utf-8")
+    workflow_path.write_text(yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8")
 
-    plan = compile_author_file(author_path, outdir=tmp_path / "build")
+    plan = compile_workflow_file(workflow_path, outdir=tmp_path / "build")
 
     assert plan.get_node("stage.PDFWeights").impl == "hep.weights.pdf_envelope"

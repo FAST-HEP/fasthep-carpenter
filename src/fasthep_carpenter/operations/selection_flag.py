@@ -128,7 +128,7 @@ def _selection_expressions(value: Any) -> list[str]:
 def _required_output(value: Any) -> str:
     if not isinstance(value, str) or not value.strip():
         raise ValueError(
-            "hep.selection.flag output must be resolved during author normalization"
+            "hep.selection.flag output must be resolved during workflow normalization"
         )
     return value.strip()
 

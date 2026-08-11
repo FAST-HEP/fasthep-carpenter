@@ -8,7 +8,7 @@ from typing import Any
 import awkward as ak
 import uproot
 import yaml
-from hepflow.compiler.normalize import normalize_author
+from hepflow.compiler.normalize import normalize_workflow
 
 from fasthep_carpenter.sinks.root_tree import manifest_path
 from fasthep_carpenter.sources.root_tree import (
@@ -18,9 +18,9 @@ from fasthep_carpenter.sources.root_tree import (
 
 
 def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path) -> None:
-    compile_author_file = _hepflow_api().compile_author_file
-    author_path = tmp_path / "author.yaml"
-    author = {
+    compile_workflow_file = _hepflow_api().compile_workflow_file
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow = {
         "version": "1.0",
         "use": {
             "profiles": [
@@ -56,9 +56,9 @@ def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path
             ],
         },
     }
-    author_path.write_text(yaml.safe_dump(author, sort_keys=False), encoding="utf-8")
+    workflow_path.write_text(yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8")
 
-    plan = compile_author_file(author_path, outdir=tmp_path / "build")
+    plan = compile_workflow_file(workflow_path, outdir=tmp_path / "build")
 
     assert plan.registry["sources"]["root_tree"]["impl"] == (
         "fasthep_carpenter.sources.root_tree:run_root_tree_source"
@@ -70,13 +70,13 @@ def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path
 
 
 def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> None:
-    run_author_file = _hepflow_api().run_author_file
+    run_workflow_file = _hepflow_api().run_workflow_file
     input_path = tmp_path / "input.root"
     with uproot.recreate(input_path) as root_file:
         root_file["events"] = {"Muon_Pt": [1, 2, 3]}
 
-    author_path = tmp_path / "author.yaml"
-    author = {
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow = {
         "version": "1.0",
         "use": {
             "profiles": [
@@ -130,10 +130,10 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
             ],
         },
     }
-    author_path.write_text(yaml.safe_dump(author, sort_keys=False), encoding="utf-8")
+    workflow_path.write_text(yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8")
     build_dir = tmp_path / "build"
 
-    result = run_author_file(author_path, outdir=build_dir, chunk_size=2)
+    result = run_workflow_file(workflow_path, outdir=build_dir, chunk_size=2)
 
     output_path = build_dir / "artifacts" / "files" / "skim" / "sample" / "0_0.root"
     second_output_path = (
@@ -204,8 +204,8 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
 
 def test_histogram_loads_unlisted_axis_and_weight_fields(tmp_path: Path) -> None:
     api = _hepflow_api()
-    compile_author_file = api.compile_author_file
-    run_author_file = api.run_author_file
+    compile_workflow_file = api.compile_workflow_file
+    run_workflow_file = api.run_workflow_file
     input_path = tmp_path / "input.root"
     with uproot.recreate(input_path) as root_file:
         root_file["events"] = {
@@ -214,8 +214,8 @@ def test_histogram_loads_unlisted_axis_and_weight_fields(tmp_path: Path) -> None
             "Unused": [4, 5, 6],
         }
 
-    author_path = tmp_path / "author.yaml"
-    author = {
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow = {
         "version": "1.0",
         "use": {
             "profiles": [
@@ -260,11 +260,11 @@ def test_histogram_loads_unlisted_axis_and_weight_fields(tmp_path: Path) -> None
             ],
         },
     }
-    author_path.write_text(yaml.safe_dump(author, sort_keys=False), encoding="utf-8")
+    workflow_path.write_text(yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8")
     build_dir = tmp_path / "build"
 
-    plan = compile_author_file(author_path, outdir=build_dir)
-    result = run_author_file(author_path, outdir=build_dir)
+    plan = compile_workflow_file(workflow_path, outdir=build_dir)
+    result = run_workflow_file(workflow_path, outdir=build_dir)
 
     assert plan.get_node("read.events").params["branches"] == [
         "EventWeight",
@@ -277,7 +277,7 @@ def test_histogram_loads_unlisted_axis_and_weight_fields(tmp_path: Path) -> None
 def test_clean_params_collection_references_are_visible_to_data_flow(
     tmp_path: Path,
 ) -> None:
-    author = {
+    workflow = {
         "version": "1.0",
         "registry": {
             "sources": {
@@ -346,7 +346,7 @@ def test_clean_params_collection_references_are_visible_to_data_flow(
         },
     }
 
-    _graph, plan = _build_plan_from_normalized(normalize_author(author))
+    _graph, plan = _build_plan_from_normalized(normalize_workflow(workflow))
 
     assert plan.registry["transforms"]["hep.clean"]["impl"] == (
         "fasthep_carpenter.operations.clean:run_clean_transform"
