@@ -17,6 +17,10 @@ registry:
       spec: fasthep_carpenter.operations.merge_fields:MERGE_FIELDS_SPEC
       impl: fasthep_carpenter.operations.merge_fields:run_merge_fields
 
+    hep.align_schema:
+      spec: fasthep_carpenter.operations.align_schema:ALIGN_SCHEMA_SPEC
+      impl: fasthep_carpenter.operations.align_schema:run_align_schema
+
     hep.define:
       spec: fasthep_carpenter.operations.define:DEFINE_SPEC
       impl: fasthep_carpenter.operations.define:run_define_transform

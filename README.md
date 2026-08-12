@@ -144,6 +144,64 @@ steps:
         - mass
 ```
 
+## Schema Alignment
+
+`hep.align_schema` aligns an event stream to an explicit logical schema before a
+writer or downstream compatibility boundary. It handles projection, renaming,
+and intentional dtype casts on Awkward fields. It does not control ROOT
+serialization details such as TTree/RNTuple choice, compression, basket layout,
+or physical branch splitting.
+
+Inline schema:
+
+```yaml
+- id: AlignSmallSchema
+  op: hep.align_schema
+  params:
+    schema:
+      version: 1
+      fields:
+        ndiMuon_Z:
+          dtype: int32
+        legacy_name:
+          source: fasthep_name
+          dtype: float32
+```
+
+External YAML or JSON schema:
+
+```yaml
+- id: AlignLegacySchema
+  op: hep.align_schema
+  params:
+    schema: validation/schemas/hinv_legacy_dtype_compat.yaml
+    missing: error
+    extra: drop
+```
+
+External schemas are loaded by `fasthep-flow` while the workflow is normalized
+and compiled. The runtime operation receives the resolved schema mapping; it
+does not reopen the YAML or JSON file during event processing.
+
+For gradual migration, keep unresolved and unmentioned fields while the target
+schema is incomplete:
+
+```yaml
+params:
+  schema: validation/schemas/partial.yaml
+  missing: ignore
+  extra: keep
+```
+
+For a strict external contract, require every source field and drop extras:
+
+```yaml
+params:
+  schema: validation/schemas/contract.yaml
+  missing: error
+  extra: drop
+```
+
 `hep.select_objects` evaluates `selection` expressions relative to the input
 collection, keeps exactly the configured fields, emits `n<output>` as the
 selected-object count, and sorts selected objects by descending `pt` by default.
