@@ -13,6 +13,10 @@ registry:
       spec: fasthep_carpenter.operations.zip_join:ZIP_JOIN_SPEC
       impl: fasthep_carpenter.operations.zip_join:run_zip_join
 
+    hep.merge_fields:
+      spec: fasthep_carpenter.operations.merge_fields:MERGE_FIELDS_SPEC
+      impl: fasthep_carpenter.operations.merge_fields:run_merge_fields
+
     hep.define:
       spec: fasthep_carpenter.operations.define:DEFINE_SPEC
       impl: fasthep_carpenter.operations.define:run_define_transform
