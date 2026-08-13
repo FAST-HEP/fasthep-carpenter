@@ -15,7 +15,12 @@ ALIGN_SCHEMA_SPEC = {
         "schema": {
             "type": "mapping",
             "required": True,
-            "load": {"formats": ["yaml", "json"]},
+            "hooks": [
+                {
+                    "name": "flow.load_mapping",
+                    "formats": ["yaml", "yml", "json"],
+                }
+            ],
         },
         "missing": {
             "type": "string",

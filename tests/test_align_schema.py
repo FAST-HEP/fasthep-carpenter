@@ -272,7 +272,7 @@ def test_align_schema_malformed_schema_fails_clearly(schema: Any) -> None:
         run_align_schema(stream=stream, schema=schema)
 
 
-def test_align_schema_external_yaml_schema_normalizes_to_mapping(tmp_path: Path) -> None:
+def test_align_schema_external_yaml_schema_compiles_to_mapping(tmp_path: Path) -> None:
     path = tmp_path / "schema.yaml"
     path.write_text(
         yaml.safe_dump(
@@ -284,15 +284,15 @@ def test_align_schema_external_yaml_schema_normalizes_to_mapping(tmp_path: Path)
         ),
         encoding="utf-8",
     )
-    normalized = _normalized_align_params(tmp_path, path)
+    params = _compiled_external_align_params(tmp_path, path)
 
-    assert normalized["schema"] == {
+    assert params["schema"] == {
         "version": 1,
         "fields": {"legacy": {"source": "fasthep", "dtype": "float32"}},
     }
 
 
-def test_align_schema_external_json_schema_normalizes_to_mapping(tmp_path: Path) -> None:
+def test_align_schema_external_json_schema_compiles_to_mapping(tmp_path: Path) -> None:
     path = tmp_path / "schema.json"
     path.write_text(
         json.dumps(
@@ -303,9 +303,9 @@ def test_align_schema_external_json_schema_normalizes_to_mapping(tmp_path: Path)
         ),
         encoding="utf-8",
     )
-    normalized = _normalized_align_params(tmp_path, path)
+    params = _compiled_external_align_params(tmp_path, path)
 
-    assert normalized["schema"] == {
+    assert params["schema"] == {
         "version": 1,
         "fields": {"legacy": {"source": "fasthep", "dtype": "int32"}},
     }
@@ -356,7 +356,11 @@ def test_align_schema_external_schema_is_loaded_during_workflow_normalization(
     )
 
     normalized = normalise_workflow_file(workflow_path, outdir=tmp_path / "build")
-    params = normalized["analysis"]["stages"][0]["params"]
+    assert normalized["analysis"]["stages"][0]["params"]["schema"] == (
+        "schemas/schema.yaml"
+    )
+    _, plan = build_plan_from_normalized(normalized)
+    params = plan.get_node("stage.Align").params
 
     assert params["schema"] == {
         "version": 1,
@@ -381,7 +385,7 @@ def test_align_schema_runtime_receives_normalized_external_yaml_schema(
         ),
         encoding="utf-8",
     )
-    params = _normalized_align_params(tmp_path, schema_path)
+    params = _compiled_external_align_params(tmp_path, schema_path)
     stream = ak.Array({"fasthep": np.array([1.0, 2.0], dtype=np.float64)})
 
     out = run_align_schema(stream=stream, extra="drop", **params)
@@ -403,7 +407,7 @@ def test_align_schema_runtime_receives_normalized_external_json_schema(
         ),
         encoding="utf-8",
     )
-    params = _normalized_align_params(tmp_path, schema_path)
+    params = _compiled_external_align_params(tmp_path, schema_path)
     stream = ak.Array({"fasthep": np.array([1, 2], dtype=np.int64)})
 
     out = run_align_schema(stream=stream, extra="drop", **params)
@@ -464,9 +468,16 @@ def test_align_schema_dependency_parser_consumes_explicit_keep_fields() -> None:
 
 def test_align_schema_spec_declares_field_glob_expansion() -> None:
     params = cast(dict[str, Any], ALIGN_SCHEMA_SPEC["params"])
+    schema = cast(dict[str, Any], params["schema"])
     drop = cast(dict[str, Any], params["drop"])
     keep = cast(dict[str, Any], params["keep"])
 
+    assert schema["hooks"] == [
+        {
+            "name": "flow.load_mapping",
+            "formats": ["yaml", "yml", "json"],
+        }
+    ]
     assert drop["hooks"] == [
         {
             "name": "flow.expand_field_glob",
@@ -563,7 +574,7 @@ def test_align_schema_does_not_mutate_input_stream() -> None:
     assert "legacy" not in stream.fields
 
 
-def _normalized_align_params(tmp_path: Path, schema_path: Path) -> dict[str, Any]:
+def _compiled_external_align_params(tmp_path: Path, schema_path: Path) -> dict[str, Any]:
     workflow_path = tmp_path / "workflow.yaml"
     registry_path = (
         Path(__file__).parents[1]
@@ -592,7 +603,8 @@ def _normalized_align_params(tmp_path: Path, schema_path: Path) -> dict[str, Any
         encoding="utf-8",
     )
     normalized = normalise_workflow_file(workflow_path, outdir=tmp_path / "build")
-    return dict(normalized["analysis"]["stages"][0]["params"])
+    _, plan = build_plan_from_normalized(normalized)
+    return dict(plan.get_node("stage.Align").params)
 
 
 def _compiled_align_params(
