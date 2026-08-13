@@ -467,14 +467,18 @@ def test_align_schema_spec_declares_field_glob_expansion() -> None:
     drop = cast(dict[str, Any], params["drop"])
     keep = cast(dict[str, Any], params["keep"])
 
-    assert drop["expand"] == {
-        "kind": "field_glob",
-        "against": "input.stream",
-    }
-    assert keep["expand"] == {
-        "kind": "field_glob",
-        "against": "input.stream",
-    }
+    assert drop["hooks"] == [
+        {
+            "name": "flow.expand_field_glob",
+            "against": "input.stream",
+        }
+    ]
+    assert keep["hooks"] == [
+        {
+            "name": "flow.expand_field_glob",
+            "against": "input.stream",
+        }
+    ]
 
 
 def test_align_schema_drop_wildcard_compiles_to_explicit_fields(
@@ -492,7 +496,7 @@ def test_align_schema_drop_wildcard_compiles_to_explicit_fields(
     )
 
     assert params["drop"] == ["Electron_pt", "Electron_eta", "Muon_pt"]
-    assert meta["param_expansions"]["drop"]["expanded"] == [
+    assert meta["compile_hooks"]["drop"][0]["output"] == [
         "Electron_pt",
         "Electron_eta",
         "Muon_pt",
@@ -514,7 +518,7 @@ def test_align_schema_keep_wildcard_compiles_to_explicit_fields(
     )
 
     assert params["keep"] == ["Muon_pt", "Muon_eta"]
-    assert meta["param_expansions"]["keep"]["patterns"] == ["Muon_*"]
+    assert meta["compile_hooks"]["keep"][0]["input"] == ["Muon_*"]
 
 
 def test_align_schema_records_runtime_provenance() -> None:

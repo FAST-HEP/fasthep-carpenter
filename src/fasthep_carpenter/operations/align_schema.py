@@ -33,13 +33,23 @@ ALIGN_SCHEMA_SPEC = {
             "type": "list[string]",
             "required": False,
             "default": None,
-            "expand": {"kind": "field_glob", "against": "input.stream"},
+            "hooks": [
+                {
+                    "name": "flow.expand_field_glob",
+                    "against": "input.stream",
+                }
+            ],
         },
         "drop": {
             "type": "list[string]",
             "required": False,
             "default": None,
-            "expand": {"kind": "field_glob", "against": "input.stream"},
+            "hooks": [
+                {
+                    "name": "flow.expand_field_glob",
+                    "against": "input.stream",
+                }
+            ],
         },
     },
     "result": {
