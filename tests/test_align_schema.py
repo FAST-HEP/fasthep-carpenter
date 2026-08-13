@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 import awkward as ak
 import numpy as np
@@ -13,6 +13,7 @@ from hepflow.compiler.data_flow import (
     DependencyContext,
     parse_component_data_dependencies,
 )
+from hepflow.compiler.plan import build_plan_from_normalized
 from hepflow.runtime import ComponentContext
 
 from fasthep_carpenter.operations.align_schema import (
@@ -150,6 +151,72 @@ def test_align_schema_extra_drop_returns_only_schema_fields() -> None:
     )
 
     assert ak.fields(out) == ["a"]
+
+
+def test_align_schema_drop_removes_explicit_scalar_and_jagged_fields() -> None:
+    stream = ak.Array(
+        {
+            "legacy": [1, 2],
+            "raw_scalar": [3, 4],
+            "raw_jagged": [[1.0, 2.0], []],
+            "other": [5, 6],
+        }
+    )
+
+    out = run_align_schema(
+        stream=stream,
+        schema={"fields": {"legacy": {}}},
+        extra="keep",
+        drop=["raw_scalar", "raw_jagged"],
+    )
+
+    assert ak.fields(out) == ["legacy", "other"]
+    assert ak.to_list(out.legacy) == [1, 2]
+    assert ak.to_list(out.other) == [5, 6]
+
+
+def test_align_schema_keep_retains_explicit_scalar_and_jagged_fields() -> None:
+    stream = ak.Array(
+        {
+            "target": [1, 2],
+            "raw_scalar": [3, 4],
+            "raw_jagged": [[1.0, 2.0], []],
+            "other": [5, 6],
+        }
+    )
+
+    out = run_align_schema(
+        stream=stream,
+        schema={"fields": {"target": {}}},
+        extra="keep",
+        keep=["target", "raw_jagged"],
+    )
+
+    assert ak.fields(out) == ["target", "raw_jagged"]
+    assert ak.to_list(out.raw_jagged) == [[1.0, 2.0], []]
+
+
+def test_align_schema_keep_and_drop_are_mutually_exclusive() -> None:
+    stream = ak.Array({"x": [1]})
+
+    with pytest.raises(ValueError, match="mutually exclusive"):
+        run_align_schema(
+            stream=stream,
+            schema={"fields": {"x": {}}},
+            keep=["x"],
+            drop=["y"],
+        )
+
+
+def test_align_schema_runtime_rejects_unexpanded_wildcards() -> None:
+    stream = ak.Array({"Electron_pt": [1]})
+
+    with pytest.raises(ValueError, match="unexpanded field patterns"):
+        run_align_schema(
+            stream=stream,
+            schema={"fields": {"Electron_pt": {}}},
+            drop=["Electron_*"],
+        )
 
 
 def test_align_schema_source_defaults_to_target_name() -> None:
@@ -383,6 +450,73 @@ def test_align_schema_spec_derived_dependencies() -> None:
     assert deps.produces == {"target_a", "target_b"}
 
 
+def test_align_schema_dependency_parser_consumes_explicit_keep_fields() -> None:
+    deps = parse_align_schema_column_dependencies(
+        {
+            "schema": {"fields": {"target": {}}},
+            "keep": ["target", "extra"],
+        }
+    )
+
+    assert deps.consumes == {"target", "extra"}
+    assert deps.produces == {"target"}
+
+
+def test_align_schema_spec_declares_field_glob_expansion() -> None:
+    params = cast(dict[str, Any], ALIGN_SCHEMA_SPEC["params"])
+    drop = cast(dict[str, Any], params["drop"])
+    keep = cast(dict[str, Any], params["keep"])
+
+    assert drop["expand"] == {
+        "kind": "field_glob",
+        "against": "input.stream",
+    }
+    assert keep["expand"] == {
+        "kind": "field_glob",
+        "against": "input.stream",
+    }
+
+
+def test_align_schema_drop_wildcard_compiles_to_explicit_fields(
+    tmp_path: Path,
+) -> None:
+    params, meta = _compiled_align_params(
+        tmp_path,
+        params={
+            "schema": {"version": 1, "fields": {"legacy": {"source": "kept"}}},
+            "missing": "ignore",
+            "extra": "keep",
+            "drop": ["Electron_*", "Muon_pt"],
+        },
+        branches=["kept", "Electron_pt", "Electron_eta", "Muon_pt", "Muon_eta"],
+    )
+
+    assert params["drop"] == ["Electron_pt", "Electron_eta", "Muon_pt"]
+    assert meta["param_expansions"]["drop"]["expanded"] == [
+        "Electron_pt",
+        "Electron_eta",
+        "Muon_pt",
+    ]
+
+
+def test_align_schema_keep_wildcard_compiles_to_explicit_fields(
+    tmp_path: Path,
+) -> None:
+    params, meta = _compiled_align_params(
+        tmp_path,
+        params={
+            "schema": {"version": 1, "fields": {"legacy": {"source": "kept"}}},
+            "missing": "ignore",
+            "extra": "keep",
+            "keep": ["Muon_*"],
+        },
+        branches=["kept", "Muon_pt", "Muon_eta", "Electron_pt"],
+    )
+
+    assert params["keep"] == ["Muon_pt", "Muon_eta"]
+    assert meta["param_expansions"]["keep"]["patterns"] == ["Muon_*"]
+
+
 def test_align_schema_records_runtime_provenance() -> None:
     stream = ak.Array({"fasthep": np.array([1, 2], dtype=np.int64)})
     ctx = ComponentContext({})
@@ -455,3 +589,55 @@ def _normalized_align_params(tmp_path: Path, schema_path: Path) -> dict[str, Any
     )
     normalized = normalise_workflow_file(workflow_path, outdir=tmp_path / "build")
     return dict(normalized["analysis"]["stages"][0]["params"])
+
+
+def _compiled_align_params(
+    tmp_path: Path,
+    *,
+    params: dict[str, Any],
+    branches: list[str],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    workflow_path = tmp_path / "workflow.yaml"
+    registry_path = (
+        Path(__file__).parents[1]
+        / "src"
+        / "fasthep_carpenter"
+        / "profiles"
+        / "registry.yaml"
+    )
+    workflow_path.write_text(
+        yaml.safe_dump(
+            {
+                "version": 1,
+                "use": {"profiles": ["hep_debug", str(registry_path)]},
+                "data": {
+                    "datasets": [
+                        {"name": "sample", "files": ["sample.root"], "eventtype": "mc"}
+                    ]
+                },
+                "sources": {
+                    "events": {
+                        "kind": "root_tree",
+                        "tree": "Events",
+                        "stream_type": "event_stream",
+                        "branches": branches,
+                    }
+                },
+                "analysis": {
+                    "stages": [
+                        {
+                            "id": "Align",
+                            "op": "hep.align_schema",
+                            "params": params,
+                        }
+                    ]
+                },
+            },
+            sort_keys=False,
+        ),
+        encoding="utf-8",
+    )
+    normalized = normalise_workflow_file(workflow_path, outdir=tmp_path / "build")
+    _, plan = build_plan_from_normalized(normalized)
+    node = plan.get_node("stage.Align")
+    return dict(node.params), dict(node.meta)
