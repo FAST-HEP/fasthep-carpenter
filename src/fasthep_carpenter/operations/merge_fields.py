@@ -8,6 +8,9 @@ MERGE_FIELDS_SPEC = {
     "name": "hep.merge_fields",
     "kind": "transform",
     "version": "1.0",
+    "input": {
+        "inactive_inputs": "omit",
+    },
     "params": {
         "on_conflict": {
             "type": "string",

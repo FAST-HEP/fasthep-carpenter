@@ -110,7 +110,9 @@ def test_merge_fields_duplicate_error_fails_at_compile(tmp_path: Path) -> None:
         )
 
 
-def test_merge_fields_keep_first_preserves_first_origin(tmp_path: Path) -> None:
+def test_merge_fields_keep_first_keeps_logical_duplicate_origins(
+    tmp_path: Path,
+) -> None:
     plan = _compile_merge_workflow(
         tmp_path,
         left_field="shared_pt",
@@ -118,10 +120,12 @@ def test_merge_fields_keep_first_preserves_first_origin(tmp_path: Path) -> None:
         on_conflict="keep_first",
     )
 
-    assert _origin_for_stream(plan, "shared_pt", "stage.Merge")["node"] == "stage.Left"
+    assert _logical_origin_nodes(plan, "shared_pt") == {"stage.Left", "stage.Right"}
 
 
-def test_merge_fields_keep_last_preserves_last_origin(tmp_path: Path) -> None:
+def test_merge_fields_keep_last_keeps_logical_duplicate_origins(
+    tmp_path: Path,
+) -> None:
     plan = _compile_merge_workflow(
         tmp_path,
         left_field="shared_pt",
@@ -129,7 +133,7 @@ def test_merge_fields_keep_last_preserves_last_origin(tmp_path: Path) -> None:
         on_conflict="keep_last",
     )
 
-    assert _origin_for_stream(plan, "shared_pt", "stage.Merge")["node"] == "stage.Right"
+    assert _logical_origin_nodes(plan, "shared_pt") == {"stage.Left", "stage.Right"}
 
 
 def test_merge_fields_rejects_incompatible_lineage(tmp_path: Path) -> None:
@@ -783,11 +787,8 @@ def _define_stage(
     return stage
 
 
-def _origin_for_stream(plan: Any, field: str, node_id: str) -> dict[str, Any]:
+def _logical_origin_nodes(plan: Any, field: str) -> set[str]:
     origin = plan.data_flow["origins"][field]
     if origin.get("kind") != "stream_scoped":
-        return origin
-    for stream in origin["streams"]:
-        if stream["node_id"] == node_id and stream["output_name"] == "stream":
-            return stream["origin"]
-    raise AssertionError(f"No origin recorded for {field!r} on {node_id!r}")
+        return {str(origin.get("node"))}
+    return {str(item.get("node")) for item in origin["origins"]}
