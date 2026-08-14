@@ -14,6 +14,7 @@ PROJECT_FIELDS_SPEC = {
     "params": {
         "stream_id": {"type": "string", "required": True},
         "aliases": {"type": "mapping", "required": True},
+        "include_existing": {"type": "boolean", "required": False, "default": True},
     },
     "result": {
         "kind": "event_stream",
@@ -58,6 +59,7 @@ def run_project_fields(
     *,
     stream_id: str,
     aliases: dict[str, str],
+    include_existing: bool = True,
     ctx: dict[str, Any] | None = None,
 ) -> ak.Array:
     """
@@ -71,6 +73,8 @@ def run_project_fields(
         Logical stream id, used only for diagnostics.
     aliases:
         Mapping of alias name -> physical branch path
+    include_existing:
+        Preserve existing fields from the input stream before adding aliases.
     """
     del ctx
     stream = _normalise_stream(stream)
@@ -78,7 +82,7 @@ def run_project_fields(
     if not aliases:
         return stream
 
-    base_cols = {name: stream[name] for name in stream.fields}
+    base_cols = {name: stream[name] for name in stream.fields} if include_existing else {}
 
     alias_cols: dict[str, Any] = {}
     missing: list[dict[str, str]] = []

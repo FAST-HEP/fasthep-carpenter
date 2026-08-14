@@ -23,6 +23,12 @@ ROOT_TREE_SOURCE_SPEC = {
             "default": "event_stream",
         },
         "branches": {"type": "list[string]", "required": False, "default": None},
+        "missing_branches": {
+            "type": "string",
+            "required": False,
+            "default": "error",
+            "allowed": ["error", "ignore"],
+        },
         "start": {"type": "integer", "required": False, "default": None},
         "stop": {"type": "integer", "required": False, "default": None},
         "metadata_only": {"type": "boolean", "required": False, "default": False},
@@ -55,6 +61,7 @@ def run_root_tree_source(
     tree: str,
     stream_type: str | None = None,
     branches: list[str] | None = None,
+    missing_branches: str = "error",
     start: int | None = None,
     stop: int | None = None,
     metadata_only: bool = False,
@@ -78,6 +85,7 @@ def run_root_tree_source(
             str(partition["file"]),
             tree=tree,
             branches=branches,
+            missing_branches=missing_branches,
             start=start if partition_start is None else partition_start,
             stop=stop if partition_stop is None else partition_stop,
             metadata_only=metadata_only,
@@ -96,6 +104,7 @@ def run_root_tree_source(
                 path,
                 tree=tree,
                 branches=branches,
+                missing_branches=missing_branches,
                 start=start,
                 stop=stop,
                 metadata_only=metadata_only,
@@ -118,6 +127,7 @@ def _read_one_file(
     *,
     tree: str,
     branches: list[str] | None,
+    missing_branches: str,
     start: int | None,
     stop: int | None,
     metadata_only: bool = False,
@@ -131,6 +141,11 @@ def _read_one_file(
             t = fin[tree]
         except KeyError as exc:
             raise KeyError(f"Tree '{tree}' not found in ROOT file: {path}") from exc
+
+        missing_policy = _missing_branch_policy(missing_branches)
+        if branches and missing_policy == "ignore":
+            available = set(_tree_keys(t))
+            branches = [str(branch) for branch in branches if str(branch) in available]
 
         if metadata_only:
             return _inspect_tree_schema(t, branches=branches, start=start, stop=stop)
@@ -204,6 +219,16 @@ def _inspect_tree_schema(
 def _tree_keys(tree: Any) -> list[str]:
     keys = tree.keys() if callable(getattr(tree, "keys", None)) else []
     return list(keys)
+
+
+def _missing_branch_policy(value: str) -> str:
+    policy = str(value)
+    if policy not in {"error", "ignore"}:
+        raise ValueError(
+            "root_tree missing_branches must be one of ['error', 'ignore'], "
+            f"got {policy!r}"
+        )
+    return policy
 
 
 def _tree_typenames(tree: Any) -> dict[str, Any]:

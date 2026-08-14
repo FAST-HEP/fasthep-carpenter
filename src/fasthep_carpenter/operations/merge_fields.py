@@ -17,8 +17,12 @@ MERGE_FIELDS_SPEC = {
         },
     },
     "result": {
-        "kind": "event_stream",
-        "description": "Event stream with top-level fields merged from inputs.",
+        "stream": {
+            "kind": "event_stream",
+            "field_propagation": "merge",
+            "lineage": "preserve",
+            "description": "Event stream with top-level fields merged from inputs.",
+        },
     },
 }
 

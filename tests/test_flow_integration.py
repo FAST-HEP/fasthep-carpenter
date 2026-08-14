@@ -6,15 +6,28 @@ from pathlib import Path
 from typing import Any
 
 import awkward as ak
+import pytest
 import uproot
 import yaml
 from hepflow.compiler.normalize import normalize_workflow
 
+from fasthep_carpenter.operations.define import DEFINE_SPEC
 from fasthep_carpenter.sinks.root_tree import manifest_path
 from fasthep_carpenter.sources.root_tree import (
     RootTreeSchema,
     run_root_tree_source,
 )
+
+NEW_LINEAGE_DEFINE_SPEC = {
+    **DEFINE_SPEC,
+    "name": "test.new_lineage",
+    "result": {
+        "stream": {
+            "kind": "event_stream",
+            "lineage": "new",
+        }
+    },
+}
 
 
 def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path) -> None:
@@ -67,6 +80,102 @@ def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path
         "fasthep_carpenter.operations.define:run_define_transform"
     )
     assert "read.events" in {node.id for node in plan.nodes}
+
+
+def test_merge_fields_spec_uses_stream_merge_contract(tmp_path: Path) -> None:
+    plan = _compile_merge_workflow(
+        tmp_path,
+        left_field="left_pt",
+        right_field="right_pt",
+    )
+
+    merge = plan.get_node("stage.Merge")
+    fields = plan.data_flow["origins"]
+    lineage = plan.data_flow["_stream_lineage"]["stage.Merge:stream"]["identity"]
+
+    assert merge.impl == "hep.merge_fields"
+    assert {"Muon_pt", "left_pt", "right_pt"} <= set(fields)
+    assert fields["left_pt"]["node"] == "stage.Left"
+    assert fields["right_pt"]["node"] == "stage.Right"
+    assert lineage == plan.data_flow["_stream_lineage"]["stage.Left:stream"]["identity"]
+
+
+def test_merge_fields_duplicate_error_fails_at_compile(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="duplicate event-stream field"):
+        _compile_merge_workflow(
+            tmp_path,
+            left_field="shared_pt",
+            right_field="shared_pt",
+            on_conflict="error",
+        )
+
+
+def test_merge_fields_keep_first_preserves_first_origin(tmp_path: Path) -> None:
+    plan = _compile_merge_workflow(
+        tmp_path,
+        left_field="shared_pt",
+        right_field="shared_pt",
+        on_conflict="keep_first",
+    )
+
+    assert _origin_for_stream(plan, "shared_pt", "stage.Merge")["node"] == "stage.Left"
+
+
+def test_merge_fields_keep_last_preserves_last_origin(tmp_path: Path) -> None:
+    plan = _compile_merge_workflow(
+        tmp_path,
+        left_field="shared_pt",
+        right_field="shared_pt",
+        on_conflict="keep_last",
+    )
+
+    assert _origin_for_stream(plan, "shared_pt", "stage.Merge")["node"] == "stage.Right"
+
+
+def test_merge_fields_rejects_incompatible_lineage(tmp_path: Path) -> None:
+    workflow = _merge_workflow(
+        left_field="left_pt",
+        right_field="right_pt",
+        left_op="hep.define",
+        right_op="hep.define",
+    )
+    workflow["registry"] = {
+        "transforms": {
+            "test.new_lineage": {
+                "spec": "test_flow_integration:NEW_LINEAGE_DEFINE_SPEC",
+                "impl": "fasthep_carpenter.operations.define:run_define_transform",
+            }
+        }
+    }
+    workflow["analysis"]["stages"][2]["op"] = "test.new_lineage"
+
+    with pytest.raises(ValueError, match="incompatible event-stream lineages"):
+        _compile_workflow_dict(tmp_path, workflow)
+
+
+def test_merge_fields_outputs_are_visible_to_downstream_field_glob(
+    tmp_path: Path,
+) -> None:
+    workflow = _merge_workflow(left_field="left_pt", right_field="right_pt")
+    workflow["analysis"]["stages"].append(
+        {
+            "id": "Align",
+            "op": "hep.align_schema",
+            "from": "Merge",
+            "params": {
+                "schema": {"version": 1, "fields": {}},
+                "missing": "ignore",
+                "extra": "drop",
+                "keep": ["left_*", "right_*"],
+            },
+        }
+    )
+
+    plan = _compile_workflow_dict(tmp_path, workflow)
+    align = plan.get_node("stage.Align")
+
+    assert align.params["keep"] == ["left_pt", "right_pt"]
+    assert {"left_pt", "right_pt"} <= set(plan.data_flow["origins"])
 
 
 def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> None:
@@ -547,9 +656,138 @@ def test_root_tree_source_partition_null_range_keeps_source_range(monkeypatch) -
     ]
 
 
+def test_root_tree_source_can_ignore_missing_requested_branches(tmp_path: Path) -> None:
+    input_path = tmp_path / "input.root"
+    with uproot.recreate(input_path) as root_file:
+        root_file["Events"] = ak.Array({"Muon_pt": [1.0, 2.0]})
+
+    strict_ctx = {
+        "partition": {
+            "file": str(input_path),
+            "start": None,
+            "stop": None,
+        }
+    }
+    result = run_root_tree_source(
+        datasets=[],
+        tree="Events",
+        branches=["Muon_pt", "GenJetAK8_eta"],
+        missing_branches="ignore",
+        ctx=strict_ctx,
+    )
+
+    assert isinstance(result, ak.Array)
+    assert result.fields == ["Muon_pt"]
+    assert ak.to_list(result["Muon_pt"]) == [1.0, 2.0]
+
+
 def _hepflow_api() -> Any:
     return import_module("hepflow.api")
 
 
 def _build_plan_from_normalized(normalized: dict[str, Any]) -> Any:
     return import_module("hepflow.compiler.plan").build_plan_from_normalized(normalized)
+
+
+def _compile_merge_workflow(
+    tmp_path: Path,
+    *,
+    left_field: str,
+    right_field: str,
+    on_conflict: str = "keep_first",
+) -> Any:
+    workflow = _merge_workflow(
+        left_field=left_field,
+        right_field=right_field,
+        on_conflict=on_conflict,
+    )
+    return _compile_workflow_dict(tmp_path, workflow)
+
+
+def _compile_workflow_dict(tmp_path: Path, workflow: dict[str, Any]) -> Any:
+    compile_workflow_file = _hepflow_api().compile_workflow_file
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow_path.write_text(yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8")
+    return compile_workflow_file(workflow_path, outdir=tmp_path / "build")
+
+
+def _merge_workflow(
+    *,
+    left_field: str,
+    right_field: str,
+    on_conflict: str = "keep_first",
+    left_op: str = "hep.define",
+    right_op: str = "hep.define",
+) -> dict[str, Any]:
+    return {
+        "version": "1.0",
+        "use": {
+            "profiles": [
+                "registry",
+                "fasthep_carpenter:registry",
+            ],
+        },
+        "data": {
+            "datasets": [
+                {"name": "sample", "files": ["sample.root"], "eventtype": "mc"}
+            ]
+        },
+        "sources": {
+            "events": {
+                "kind": "root_tree",
+                "tree": "Events",
+                "stream_type": "event_stream",
+                "branches": ["Muon_pt"],
+            },
+        },
+        "analysis": {
+            "stages": [
+                _define_stage("Prepare", "base_pt", op="hep.define"),
+                _define_stage("Left", left_field, op=left_op, upstream="Prepare"),
+                _define_stage("Right", right_field, op=right_op, upstream="Prepare"),
+                {
+                    "id": "Merge",
+                    "op": "hep.merge_fields",
+                    "from": [
+                        {"node": "Left", "as": "left"},
+                        {"node": "Right", "as": "right"},
+                    ],
+                    "params": {"on_conflict": on_conflict},
+                },
+            ],
+        },
+    }
+
+
+def _define_stage(
+    node_id: str,
+    field: str,
+    *,
+    op: str,
+    upstream: str | None = None,
+) -> dict[str, Any]:
+    stage: dict[str, Any] = {
+        "id": node_id,
+        "op": op,
+        "params": {
+            "variables": [
+                {
+                    "name": field,
+                    "expr": "Muon_pt",
+                }
+            ]
+        },
+    }
+    if upstream is not None:
+        stage["from"] = upstream
+    return stage
+
+
+def _origin_for_stream(plan: Any, field: str, node_id: str) -> dict[str, Any]:
+    origin = plan.data_flow["origins"][field]
+    if origin.get("kind") != "stream_scoped":
+        return origin
+    for stream in origin["streams"]:
+        if stream["node_id"] == node_id and stream["output_name"] == "stream":
+            return stream["origin"]
+    raise AssertionError(f"No origin recorded for {field!r} on {node_id!r}")
