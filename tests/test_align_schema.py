@@ -339,7 +339,7 @@ def test_align_schema_external_schema_is_loaded_during_workflow_normalization(
         yaml.safe_dump(
             {
                 "version": 1,
-                "use": {"profiles": ["hep_debug", str(registry_path)]},
+                "use": {"profiles": ["basic", str(registry_path)]},
                 "analysis": {
                     "stages": [
                         {
@@ -587,7 +587,7 @@ def _compiled_external_align_params(tmp_path: Path, schema_path: Path) -> dict[s
         yaml.safe_dump(
             {
                 "version": 1,
-                "use": {"profiles": ["hep_debug", str(registry_path)]},
+                "use": {"profiles": ["basic", str(registry_path)]},
                 "analysis": {
                     "stages": [
                         {
@@ -625,7 +625,7 @@ def _compiled_align_params(
         yaml.safe_dump(
             {
                 "version": 1,
-                "use": {"profiles": ["hep_debug", str(registry_path)]},
+                "use": {"profiles": ["basic", str(registry_path)]},
                 "data": {
                     "datasets": [
                         {"name": "sample", "files": ["sample.root"], "eventtype": "mc"}
