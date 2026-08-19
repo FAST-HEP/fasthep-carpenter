@@ -9,7 +9,7 @@ on:
 
 jobs:
   alpha-ci:
-    name: Python 3.12
+    name: Python 3.13
     runs-on: ubuntu-latest
 
     steps:
@@ -21,7 +21,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
-          python-version: "3.12"
+          python-version: "3.13"
 
       - name: Install Git FAST-HEP dependencies
         run: |
