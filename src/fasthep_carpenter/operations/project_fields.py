@@ -13,7 +13,17 @@ PROJECT_FIELDS_SPEC = {
     "input": {"name": "stream", "kind": "event_stream", "required": True},
     "params": {
         "stream_id": {"type": "string", "required": True},
-        "aliases": {"type": "mapping", "required": True},
+        "aliases": {
+            "type": "mapping",
+            "required": True,
+            "hooks": [
+                {
+                    "name": "flow.load_mapping",
+                    "formats": ["yaml", "yml", "json"],
+                },
+                {"name": "flow.expand_mapping_matrix"},
+            ],
+        },
         "include_existing": {"type": "boolean", "required": False, "default": True},
     },
     "result": {
