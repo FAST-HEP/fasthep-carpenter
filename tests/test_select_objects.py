@@ -186,6 +186,51 @@ def test_missing_required_field_fails_clearly() -> None:
         )
 
 
+def test_missing_keep_fields_can_be_ignored_without_changing_present_fields() -> None:
+    out = run_select_objects(
+        stream=ak.Array(
+            {
+                "Jet_pt": [[30.0, 10.0, 50.0]],
+                "Jet_eta": [[0.3, 0.1, 0.5]],
+                "Jet_aux": [[3, 1, 5]],
+            }
+        ),
+        collection="Jet",
+        output="selected_Jet",
+        selection=["pt >= 20"],
+        keep=["pt", "eta", "aux", "missing"],
+        missing_fields="ignore",
+    )
+
+    assert ak.to_list(out.nselected_Jet) == [2]
+    assert ak.to_list(out.selected_Jet_pt) == [[50.0, 30.0]]
+    assert ak.to_list(out.selected_Jet_aux) == [[5, 3]]
+    assert "selected_Jet_missing" not in out.fields
+
+
+def test_missing_keep_fields_still_fail_by_default() -> None:
+    with pytest.raises(KeyError, match="Jet_missing"):
+        run_select_objects(
+            stream=ak.Array({"Jet_pt": [[30.0]], "Jet_eta": [[0.3]]}),
+            collection="Jet",
+            output="selected_Jet",
+            selection=["pt >= 20"],
+            keep=["pt", "missing"],
+        )
+
+
+def test_missing_fields_mode_is_validated() -> None:
+    with pytest.raises(ValueError, match="missing_fields"):
+        run_select_objects(
+            stream=ak.Array({"Jet_pt": [[30.0]], "Jet_eta": [[0.3]]}),
+            collection="Jet",
+            output="selected_Jet",
+            selection=["pt >= 20"],
+            keep=["pt"],
+            missing_fields="skip",
+        )
+
+
 def test_no_overlap_cleaning_behaviour_occurs() -> None:
     out = run_select_objects(
         stream=ak.Array(

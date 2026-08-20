@@ -28,6 +28,7 @@ SELECT_OBJECTS_SPEC = {
         "keep": {"type": "list[string]", "required": True},
         "derived": {"type": "mapping", "required": False},
         "sort": {"type": "mapping", "required": False, "default": DEFAULT_SORT},
+        "missing_fields": {"type": "string", "required": False, "default": "error"},
         "legacy": {"type": "mapping", "required": False},
     },
     "normalize_params": {"defaults": True},
@@ -85,6 +86,7 @@ def run_select_objects(
     keep: list[str] | None = None,
     derived: dict[str, str] | None = None,
     sort: dict[str, Any] | bool | None = None,
+    missing_fields: str = "error",
     ctx: ComponentContext | None = None,
     **params: Any,
 ) -> Any:
@@ -96,6 +98,7 @@ def run_select_objects(
     selection_exprs = _selection_expressions(selection)
     sort_cfg = _normalise_sort(sort)
     sort_field = _sort_field(sort_cfg)
+    missing_mode = _missing_fields_mode(missing_fields)
 
     runtime_params = {
         "collection": collection_name,
@@ -104,11 +107,15 @@ def run_select_objects(
         "keep": keep_fields,
         "derived": derived_exprs,
         "sort": sort_cfg,
+        "missing_fields": missing_mode,
     }
     deps = _dependencies(runtime_params)
     input_fields = sorted(deps.consumes)
     for input_field in input_fields:
-        _field(stream, input_field)
+        if input_field in getattr(stream, "fields", []):
+            continue
+        if missing_mode == "error":
+            _field(stream, input_field)
 
     mask_like = _mask_like_field(
         stream,
@@ -116,6 +123,7 @@ def run_select_objects(
         keep=keep_fields,
         derived=derived_exprs,
         input_fields=input_fields,
+        missing_fields=missing_mode,
     )
     mask = ak.ones_like(mask_like == mask_like, dtype=bool)
     resolved_selection = [
@@ -134,7 +142,15 @@ def run_select_objects(
             )
             selected[field] = eval_expr(stream, resolved, dict(ctx or {}))[mask]
         else:
-            selected[field] = _field(stream, f"{collection_name}_{field}")[mask]
+            input_field = f"{collection_name}_{field}"
+            if input_field not in getattr(stream, "fields", []):
+                if missing_mode == "ignore":
+                    continue
+                _field(stream, input_field)
+            selected[field] = _field(stream, input_field)[mask]
+
+    if not selected:
+        raise ValueError("hep.select_objects did not select any output fields")
 
     if sort_field is not None:
         if sort_field in selected:
@@ -157,14 +173,18 @@ def run_select_objects(
         selected = {field: value[indices] for field, value in selected.items()}
 
     out = stream
-    out = ak.with_field(out, ak.num(selected[keep_fields[0]], axis=1), f"n{output_name}")
+    first_field = next(iter(selected))
+    out = ak.with_field(out, ak.num(selected[first_field], axis=1), f"n{output_name}")
     for field in keep_fields:
+        if field not in selected:
+            continue
         out = ak.with_field(out, selected[field], f"{output_name}_{field}")
 
     if ctx is not None:
+        output_symbols = [f"n{output_name}", *(f"{output_name}_{field}" for field in selected)]
         ctx.provenance.record_operation(
             inputs={"symbols": input_fields},
-            outputs={"symbols": sorted(deps.produces)},
+            outputs={"symbols": sorted(output_symbols)},
         )
     return out
 
@@ -215,12 +235,18 @@ def _mask_like_field(
     keep: list[str],
     derived: dict[str, str],
     input_fields: list[str],
+    missing_fields: str,
 ) -> Any:
+    stream_fields = set(getattr(stream, "fields", []) or [])
     for field in keep:
-        if field not in derived:
+        if field not in derived and f"{collection}_{field}" in stream_fields:
             return _field(stream, f"{collection}_{field}")
     if input_fields:
-        return _field(stream, input_fields[0])
+        for input_field in input_fields:
+            if input_field in stream_fields:
+                return _field(stream, input_field)
+        if missing_fields == "error":
+            return _field(stream, input_fields[0])
     raise ValueError("hep.select_objects requires at least one concrete input field")
 
 
@@ -269,6 +295,16 @@ def _normalise_sort(value: dict[str, Any] | bool | None) -> dict[str, Any] | boo
     if not isinstance(value, dict):
         raise ValueError("hep.select_objects sort must be a mapping, false, or omitted")
     return dict(value)
+
+
+def _missing_fields_mode(value: str) -> str:
+    mode = str(value).strip()
+    if mode not in {"error", "ignore"}:
+        raise ValueError(
+            "hep.select_objects missing_fields must be 'error' or 'ignore', "
+            f"got {value!r}"
+        )
+    return mode
 
 
 def _sort_field(value: Any) -> str | None:
