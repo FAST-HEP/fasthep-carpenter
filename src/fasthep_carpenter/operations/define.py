@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any
 
 import awkward as ak
+import numpy as np
 from hepflow.compiler.expr_symbols import data_symbols_in_expr
 from hepflow.model.data_flow import DataDependencyResult
 from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
@@ -96,7 +97,7 @@ def run_define(
 
         if "expr" in v:
             value = eval_expr(out, str(v["expr"]), ctx)
-            out = ak.with_field(out, value, name)
+            out = _with_defined_field(out, value, name, dtype=v.get("dtype"))
             continue
 
         red = v.get("reduce")
@@ -117,7 +118,7 @@ def run_define(
             else:
                 raise ValueError(f"Unknown reduce op: {op}")
 
-            out = ak.with_field(out, value, name)
+            out = _with_defined_field(out, value, name, dtype=v.get("dtype"))
             continue
 
         raise ValueError(f"Unknown variable spec: {v}")
@@ -125,11 +126,14 @@ def run_define(
     return {DEFAULT_PRIMARY_STREAM_ID: out}
 
 
-def run_define_transform(*, stream, variables, ctx=None, **kwargs):
+def run_define_transform(
+    *, stream: Any, variables: list[dict[str, Any]], ctx: Any = None, **kwargs: Any
+) -> ak.Array:
     stream = unwrap_legacy_data_envelope(stream)
     legacy_data = legacy_data_envelope(stream)
     legacy_params = {
         "variables": variables,
+        **kwargs,
     }
     legacy_ctx = dict(ctx or {})
 
@@ -137,6 +141,25 @@ def run_define_transform(*, stream, variables, ctx=None, **kwargs):
         data=legacy_data,
         params=legacy_params,
         ctx=legacy_ctx,
-        **kwargs,
     )
-    return {"events": get_stream_array(out, DEFAULT_PRIMARY_STREAM_ID)}
+    return get_stream_array(out, DEFAULT_PRIMARY_STREAM_ID)
+
+
+def _with_defined_field(
+    events: ak.Array,
+    value: Any,
+    name: str,
+    *,
+    dtype: Any = None,
+) -> ak.Array:
+    out = ak.with_field(events, value, name)
+    if dtype is None:
+        return out
+    return ak.with_field(out, ak.values_astype(out[name], _dtype(dtype)), name)
+
+
+def _dtype(dtype: Any) -> np.dtype:
+    try:
+        return np.dtype(dtype)
+    except TypeError as exc:
+        raise ValueError(f"Unsupported define dtype {dtype!r}") from exc
