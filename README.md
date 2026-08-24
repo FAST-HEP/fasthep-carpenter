@@ -240,6 +240,62 @@ such as `pt` and `phi`; they do not add source-branch dependencies. The default
 reduction records the count before reduction and keeps the highest-pt recoil
 candidate without filtering events.
 
+Use `hep.choose` when several event categories choose between coherent sets of
+event-level values. This replaces hard-to-scan nested conditionals such as:
+
+```yaml
+- name: Recoil_pt
+  expr: where(SingleMuon_CR_selection, singleMuon_recoil_pt,
+        where(DiMuon_CR_selection, diMuon_recoil_pt,
+        where(SR_selection, SR_recoil_pt, -999.0)))
+- name: Recoil_phi
+  expr: where(SingleMuon_CR_selection, singleMuon_recoil_phi,
+        where(DiMuon_CR_selection, diMuon_recoil_phi,
+        where(SR_selection, SR_recoil_phi, -999.0)))
+```
+
+Nested conditionals hide priority in expression structure, repeat the same
+choice separately for related outputs, silently choose the first match when
+selections overlap, and make accidental scalar/jagged mixing easy. The same
+logic can be written explicitly:
+
+```yaml
+- id: ChooseRecoil
+  op: hep.choose
+  params:
+    cases:
+      - name: singleMuon
+        when: SingleMuon_CR_selection
+        values:
+          Recoil_pt: leading(singleMuon_recoil_pt, -999.0)
+          Recoil_phi: leading(singleMuon_recoil_phi, -999.0)
+      - name: diMuon
+        when: DiMuon_CR_selection
+        values:
+          Recoil_pt: leading(diMuon_recoil_pt, -999.0)
+          Recoil_phi: leading(diMuon_recoil_phi, -999.0)
+      - name: signalRegion
+        when: SR_selection
+        values:
+          Recoil_pt: leading(SR_recoil_pt, -999.0)
+          Recoil_phi: leading(SR_recoil_phi, -999.0)
+    default:
+      Recoil_pt: -999.0
+      Recoil_phi: -999.0
+    on_multiple: error
+    on_no_match: default
+```
+
+Each `when` predicate must produce one boolean per event. Each value expression
+must produce one scalar value per event, or be a scalar expression that can be
+broadcast to all events. All cases, and the `default` mapping when
+`on_no_match: default` is used, must define exactly the same output names. Use
+`on_multiple: error` to require mutually exclusive cases, or
+`on_multiple: first` to make authored-order priority explicit. Use
+`on_no_match: error` to require a category for every event, or
+`on_no_match: default` to fill unmatched events from the `default` mapping.
+Cases are evaluated in authored order only when `first` semantics are requested.
+
 Use `hep.selection.cutflow` for event filtering and cutflow accounting. An
 ordinary selection expression must be an event-level boolean expression that
 produces exactly one decision per event, for example `MET_pt > 120`. Object or

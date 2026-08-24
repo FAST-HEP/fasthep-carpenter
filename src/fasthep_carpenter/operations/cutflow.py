@@ -4,16 +4,23 @@ from typing import Any
 
 import awkward as ak
 import numpy as np
-from awkward.types import ArrayType, NumpyType
 from hepflow.compiler.expr_symbols import data_symbols_in_expr
 from hepflow.model.data_flow import DataDependencyResult
 from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 from hepflow.registry.defaults import default_expr_registry
 from hepflow.runtime.engine import eval_expr
 
+from fasthep_carpenter.operations._validation import validate_event_mask
 from fasthep_carpenter.runtime.compat import (
     legacy_data_envelope,
     unwrap_legacy_data_envelope,
+)
+
+CUTFLOW_MASK_GUIDANCE = (
+    "hep.selection.cutflow expressions must produce one boolean per event "
+    "('N * bool'). For an object-level expression use an explicit "
+    "`reduce: {op: any|all, over: ...}` or convert the quantity to an "
+    "event-level field upstream."
 )
 
 CUTFLOW_SPEC = {
@@ -268,31 +275,12 @@ def _step_mask(events: Any, step: Any, ctx: dict[str, Any], *, n_events: int) ->
 
 
 def _validate_event_mask(mask: Any, *, n_events: int, step: Any) -> Any:
-    mask_type = ak.type(mask)
-    try:
-        outer_length = len(mask)
-    except TypeError as exc:
-        raise _event_mask_error(step, mask_type) from exc
-
-    content = mask_type.content if isinstance(mask_type, ArrayType) else None
-    if (
-        outer_length == n_events
-        and isinstance(content, NumpyType)
-        and content.primitive == "bool"
-    ):
-        return mask
-
-    raise _event_mask_error(step, mask_type)
-
-
-def _event_mask_error(step: Any, mask_type: Any) -> ValueError:
-    return ValueError(
-        f"Selection expression {_mask_expr(step)!r} produced a non-event-level "
-        f"mask with type {str(mask_type)!r}.\n\n"
-        "hep.selection.cutflow expressions must produce one boolean per event "
-        "('N * bool'). For an object-level expression use an explicit "
-        "`reduce: {op: any|all, over: ...}` or convert the quantity to an "
-        "event-level field upstream."
+    return validate_event_mask(
+        mask,
+        n_events=n_events,
+        expression=_mask_expr(step),
+        context="Selection",
+        guidance=CUTFLOW_MASK_GUIDANCE,
     )
 
 
