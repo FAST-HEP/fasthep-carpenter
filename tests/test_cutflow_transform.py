@@ -60,6 +60,171 @@ def test_cutflow_transform_preserves_full_selection_stats() -> None:
     assert cuts[1]["n_out"] == 4.0
 
 
+def test_cutflow_transform_accepts_event_level_boolean_expression() -> None:
+    events = ak.Array({"Flag_A": [True, False, True, False]})
+
+    out = run_cutflow(
+        data={DEFAULT_PRIMARY_STREAM_ID: events},
+        params={"selection": {"All": ["Flag_A"]}},
+        ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
+    )
+
+    assert ak.to_list(out[DEFAULT_PRIMARY_STREAM_ID]["Flag_A"]) == [True, True]
+    assert out["cutflow"]["cuts"][0]["n_unweighted_out"] == 2
+
+
+def test_cutflow_transform_rejects_jagged_expression_mask() -> None:
+    events = ak.Array({"Muon_Pt": [[30.0], [20.0], [], [40.0, 10.0]]})
+
+    with pytest.raises(ValueError, match="non-event-level mask") as excinfo:
+        run_cutflow(
+            data={DEFAULT_PRIMARY_STREAM_ID: events},
+            params={"selection": {"All": ["Muon_Pt > 25"]}},
+            ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
+        )
+
+    message = str(excinfo.value)
+    assert "Selection expression 'Muon_Pt > 25'" in message
+    assert "4 * var * bool" in message
+    assert "one boolean per event ('N * bool')" in message
+    assert "reduce: {op: any|all, over: ...}" in message
+
+
+def test_cutflow_transform_rejects_union_of_event_and_jagged_masks() -> None:
+    events = ak.Array({"event": [1, 2, 3]})
+    mixed_mask = ak.concatenate([ak.Array([True]), ak.Array([[False], []])], axis=0)
+
+    with pytest.raises(ValueError, match="non-event-level mask") as excinfo:
+        run_cutflow(
+            data={DEFAULT_PRIMARY_STREAM_ID: events},
+            params={"selection": {"All": ["mixed_mask"]}},
+            ctx={
+                "primary_stream": DEFAULT_PRIMARY_STREAM_ID,
+                "mixed_mask": mixed_mask,
+            },
+        )
+
+    message = str(excinfo.value)
+    assert "Selection expression 'mixed_mask'" in message
+    assert "3 * union[bool, var * bool]" in message
+
+
+def test_cutflow_transform_rejects_optional_jagged_expression_mask() -> None:
+    events = ak.Array({"Muon_Pass": [[True], None, []]})
+
+    with pytest.raises(ValueError, match="non-event-level mask") as excinfo:
+        run_cutflow(
+            data={DEFAULT_PRIMARY_STREAM_ID: events},
+            params={"selection": {"All": ["Muon_Pass"]}},
+            ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
+        )
+
+    message = str(excinfo.value)
+    assert "Selection expression 'Muon_Pass'" in message
+    assert "3 * option[var * bool]" in message
+
+
+def test_cutflow_transform_rejects_wrong_outer_mask_length() -> None:
+    events = ak.Array({"event": [1, 2, 3]})
+
+    with pytest.raises(ValueError, match="non-event-level mask") as excinfo:
+        run_cutflow(
+            data={DEFAULT_PRIMARY_STREAM_ID: events},
+            params={"selection": {"All": ["short_mask"]}},
+            ctx={
+                "primary_stream": DEFAULT_PRIMARY_STREAM_ID,
+                "short_mask": ak.Array([True, False]),
+            },
+        )
+
+    message = str(excinfo.value)
+    assert "Selection expression 'short_mask'" in message
+    assert "2 * bool" in message
+
+
+def test_cutflow_transform_rejects_scalar_boolean_mask() -> None:
+    events = ak.Array({"event": [1, 2, 3]})
+
+    with pytest.raises(ValueError, match="non-event-level mask") as excinfo:
+        run_cutflow(
+            data={DEFAULT_PRIMARY_STREAM_ID: events},
+            params={"selection": {"All": ["True"]}},
+            ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
+        )
+
+    message = str(excinfo.value)
+    assert "Selection expression 'True'" in message
+    assert "type 'bool'" in message
+
+
+def test_cutflow_transform_rejects_numeric_mask() -> None:
+    events = ak.Array({"Flag_A": [1, 0, 1]})
+
+    with pytest.raises(ValueError, match="non-event-level mask") as excinfo:
+        run_cutflow(
+            data={DEFAULT_PRIMARY_STREAM_ID: events},
+            params={"selection": {"All": ["Flag_A"]}},
+            ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
+        )
+
+    message = str(excinfo.value)
+    assert "Selection expression 'Flag_A'" in message
+    assert "3 * int64" in message
+
+
+def test_cutflow_transform_accepts_explicit_reduce_any_over_jagged_bool() -> None:
+    events = ak.Array({"Muon_Pass": [[True], [False], [], [True, False]]})
+
+    out = run_cutflow(
+        data={DEFAULT_PRIMARY_STREAM_ID: events},
+        params={
+            "selection": {"All": [{"reduce": {"op": "any", "over": "Muon_Pass"}}]}
+        },
+        ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
+    )
+
+    assert ak.to_list(out[DEFAULT_PRIMARY_STREAM_ID]["Muon_Pass"]) == [
+        [True],
+        [True, False],
+    ]
+    assert out["cutflow"]["cuts"][0]["n_unweighted_out"] == 2
+
+
+def test_cutflow_transform_accepts_explicit_reduce_all_over_jagged_bool() -> None:
+    events = ak.Array({"Muon_Pass": [[True], [False], [], [True, False]]})
+
+    out = run_cutflow(
+        data={DEFAULT_PRIMARY_STREAM_ID: events},
+        params={
+            "selection": {"All": [{"reduce": {"op": "all", "over": "Muon_Pass"}}]}
+        },
+        ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
+    )
+
+    assert ak.to_list(out[DEFAULT_PRIMARY_STREAM_ID]["Muon_Pass"]) == [
+        [True],
+        [],
+    ]
+    assert out["cutflow"]["cuts"][0]["n_unweighted_out"] == 2
+
+
+def test_cutflow_transform_rejects_malformed_reduced_mask() -> None:
+    events = ak.Array({"Muon_Pass": [[[True]], [[False, True]], []]})
+
+    with pytest.raises(ValueError, match="non-event-level mask") as excinfo:
+        run_cutflow(
+            data={DEFAULT_PRIMARY_STREAM_ID: events},
+            params={
+                "selection": {"All": [{"reduce": {"op": "any", "over": "Muon_Pass"}}]}
+            },
+            ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
+        )
+
+    message = str(excinfo.value)
+    assert "Selection expression 'any(Muon_Pass)'" in message
+    assert "3 * var * bool" in message
+
+
 def test_cutflow_transform_supports_branched_selection_groups() -> None:
     events = ak.Array(
         {

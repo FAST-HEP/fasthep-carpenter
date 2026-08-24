@@ -240,6 +240,15 @@ such as `pt` and `phi`; they do not add source-branch dependencies. The default
 reduction records the count before reduction and keeps the highest-pt recoil
 candidate without filtering events.
 
+Use `hep.selection.cutflow` for event filtering and cutflow accounting. An
+ordinary selection expression must be an event-level boolean expression that
+produces exactly one decision per event, for example `MET_pt > 120`. Object or
+jagged expressions must be reduced explicitly, for example
+`{reduce: {op: any, over: "Muon_Pt > 25"}}` or
+`{reduce: {op: all, over: "Jet_passId"}}`. A singleton object collection is
+still jagged and is not automatically treated as an event scalar; reduce it
+explicitly or convert it to an event-level field upstream.
+
 Use `hep.selection.flag` for event-level predicates that should be materialized
 as boolean fields without filtering events or producing cutflow counts. Its
 `selection` list is combined with logical AND and written to `output`; if

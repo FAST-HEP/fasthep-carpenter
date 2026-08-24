@@ -4,6 +4,7 @@ from typing import Any
 
 import awkward as ak
 import numpy as np
+from awkward.types import ArrayType, NumpyType
 from hepflow.compiler.expr_symbols import data_symbols_in_expr
 from hepflow.model.data_flow import DataDependencyResult
 from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
@@ -117,7 +118,8 @@ def run_cutflow(
         current = _base_mask(initial_mask, parents, masks_by_node)
         for i, step in enumerate(steps):
             before = current
-            current = current & _step_mask(events, step, ctx)
+            step_mask = _step_mask(events, step, ctx, n_events=len(events))
+            current = current & step_mask
             node_id = f"{selection_name}[{i}]"
             masks_by_node[node_id] = current
             cuts.append(_cut_row(node_id, selection_name, i, step, before, current, w))
@@ -231,22 +233,79 @@ def _base_mask(
     return mask
 
 
-def _step_mask(events: Any, step: Any, ctx: dict[str, Any]) -> Any:
+def _step_mask(events: Any, step: Any, ctx: dict[str, Any], *, n_events: int) -> Any:
     if isinstance(step, dict) and "expr" in step:
-        return eval_expr(events, str(step["expr"]), ctx)
+        return _validate_event_mask(
+            eval_expr(events, str(step["expr"]), ctx),
+            n_events=n_events,
+            step=step,
+        )
     if isinstance(step, dict) and "reduce" in step:
         red = step["reduce"]
         op = red.get("op")
         over = str(red.get("over"))
         arr = eval_expr(events, over, ctx)
         if op == "any":
-            return ak.any(arr, axis=1)
+            return _validate_event_mask(
+                ak.any(arr, axis=1),
+                n_events=n_events,
+                step=step,
+            )
         if op == "all":
-            return ak.all(arr, axis=1)
+            return _validate_event_mask(
+                ak.all(arr, axis=1),
+                n_events=n_events,
+                step=step,
+            )
         raise ValueError(f"Unsupported reduce op in selection: {op}")
     if isinstance(step, str):
-        return eval_expr(events, step, ctx)
+        return _validate_event_mask(
+            eval_expr(events, step, ctx),
+            n_events=n_events,
+            step=step,
+        )
     raise ValueError(f"Bad selection step: {step}")
+
+
+def _validate_event_mask(mask: Any, *, n_events: int, step: Any) -> Any:
+    mask_type = ak.type(mask)
+    try:
+        outer_length = len(mask)
+    except TypeError as exc:
+        raise _event_mask_error(step, mask_type) from exc
+
+    content = mask_type.content if isinstance(mask_type, ArrayType) else None
+    if (
+        outer_length == n_events
+        and isinstance(content, NumpyType)
+        and content.primitive == "bool"
+    ):
+        return mask
+
+    raise _event_mask_error(step, mask_type)
+
+
+def _event_mask_error(step: Any, mask_type: Any) -> ValueError:
+    return ValueError(
+        f"Selection expression {_mask_expr(step)!r} produced a non-event-level "
+        f"mask with type {str(mask_type)!r}.\n\n"
+        "hep.selection.cutflow expressions must produce one boolean per event "
+        "('N * bool'). For an object-level expression use an explicit "
+        "`reduce: {op: any|all, over: ...}` or convert the quantity to an "
+        "event-level field upstream."
+    )
+
+
+def _mask_expr(step: Any) -> Any:
+    if isinstance(step, str):
+        return step
+    if isinstance(step, dict):
+        if "expr" in step:
+            return step["expr"]
+        reduce_spec = step.get("reduce")
+        if isinstance(reduce_spec, dict):
+            return f"{reduce_spec.get('op', 'reduce')}({reduce_spec.get('over', '')})"
+    return step
 
 
 def _cut_row(
