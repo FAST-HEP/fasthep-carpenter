@@ -20,7 +20,13 @@ DEFINE_SPEC = {
     "kind": "transform",
     "version": "1.0",
     "input": {"name": "stream", "kind": "event_stream", "required": True},
-    "params": {"variables": {"type": "list[mapping]", "required": True}},
+    "params": {
+        "variables": {
+            "type": "list[mapping]",
+            "required": True,
+            "hooks": [{"name": "flow.expand_mapping_matrix"}],
+        }
+    },
     "result": {
         "kind": "event_stream",
         "description": "Event stream with newly defined fields.",

@@ -82,6 +82,73 @@ def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path
     assert "read.events" in {node.id for node in plan.nodes}
 
 
+def test_define_variables_expand_mapping_matrix_before_plan(tmp_path: Path) -> None:
+    compile_workflow_file = _hepflow_api().compile_workflow_file
+    workflow_path = tmp_path / "workflow.yaml"
+    workflow = {
+        "version": "1.0",
+        "use": {
+            "profiles": [
+                "registry",
+                "fasthep_carpenter:registry",
+            ],
+        },
+        "data": {"datasets": [], "defaults": {}},
+        "sources": {
+            "events": {
+                "kind": "root_tree",
+                "tree": "events",
+                "stream_type": "event_stream",
+            },
+        },
+        "analysis": {
+            "stages": [
+                {
+                    "id": "Weights",
+                    "op": "hep.define",
+                    "params": {
+                        "variables": [
+                            {"name": "weight_nominal", "expr": "1.0"},
+                            {
+                                "name": "weight_pdf_{index}",
+                                "expr": "1.0",
+                                "dtype": "float32",
+                                "matrix": {
+                                    "index": {
+                                        "range": {
+                                            "start": 0,
+                                            "stop": 3,
+                                        }
+                                    }
+                                },
+                            },
+                        ]
+                    },
+                },
+            ]
+        },
+    }
+    workflow_path.write_text(yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8")
+
+    plan = compile_workflow_file(workflow_path, outdir=tmp_path / "build")
+
+    node = plan.get_node("stage.Weights")
+    assert node.params["variables"] == [
+        {"name": "weight_nominal", "expr": "1.0"},
+        {"name": "weight_pdf_0", "expr": "1.0", "dtype": "float32"},
+        {"name": "weight_pdf_1", "expr": "1.0", "dtype": "float32"},
+        {"name": "weight_pdf_2", "expr": "1.0", "dtype": "float32"},
+    ]
+    assert "matrix" not in node.params["variables"][1]
+    assert node.meta["compile_hooks"]["variables"][0]["generated"] == 3
+    assert set(plan.data_flow["origins"]) >= {
+        "weight_nominal",
+        "weight_pdf_0",
+        "weight_pdf_1",
+        "weight_pdf_2",
+    }
+
+
 def test_merge_fields_spec_uses_stream_merge_contract(tmp_path: Path) -> None:
     plan = _compile_merge_workflow(
         tmp_path,
