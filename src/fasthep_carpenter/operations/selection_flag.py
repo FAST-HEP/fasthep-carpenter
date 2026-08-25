@@ -2,13 +2,16 @@ from __future__ import annotations
 
 from typing import Any
 
-import awkward as ak
 from hepflow.compiler.expr_symbols import data_symbols_in_expr
 from hepflow.model.data_flow import DataDependencyResult
 from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 from hepflow.registry.defaults import default_expr_registry
 from hepflow.runtime.engine import eval_expr
 
+from fasthep_carpenter.operations._selection import (
+    _required_output,
+    materialize_selection_flag,
+)
 from fasthep_carpenter.runtime.compat import (
     legacy_data_envelope,
     unwrap_legacy_data_envelope,
@@ -61,7 +64,9 @@ def run_selection_flag(
     selection = _selection_expressions(params.get("selection"))
 
     deps = _runtime_dependencies(params, ctx)
-    missing = [symbol for symbol in sorted(deps.consumes) if symbol not in events.fields]
+    missing = [
+        symbol for symbol in sorted(deps.consumes) if symbol not in events.fields
+    ]
     if missing:
         raise KeyError(
             "hep.selection.flag missing required field(s): "
@@ -78,7 +83,14 @@ def run_selection_flag(
             "hep.selection.flag selection must contain at least one expression"
         )
 
-    return {DEFAULT_PRIMARY_STREAM_ID: ak.with_field(events, flag, output)}
+    return {
+        DEFAULT_PRIMARY_STREAM_ID: materialize_selection_flag(
+            events,
+            flag,
+            output,
+            op_name="hep.selection.flag",
+        )
+    }
 
 
 def run_selection_flag_transform(
@@ -123,14 +135,6 @@ def _selection_expressions(value: Any) -> list[str]:
             )
         expressions.append(item.strip())
     return expressions
-
-
-def _required_output(value: Any) -> str:
-    if not isinstance(value, str) or not value.strip():
-        raise ValueError(
-            "hep.selection.flag output must be resolved during workflow normalization"
-        )
-    return value.strip()
 
 
 def _runtime_dependencies(

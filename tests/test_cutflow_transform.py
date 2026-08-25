@@ -65,12 +65,207 @@ def test_cutflow_transform_accepts_event_level_boolean_expression() -> None:
 
     out = run_cutflow(
         data={DEFAULT_PRIMARY_STREAM_ID: events},
-        params={"selection": {"All": ["Flag_A"]}},
+        params={"emit_flags": False, "selection": {"All": ["Flag_A"]}},
         ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
     )
 
     assert ak.to_list(out[DEFAULT_PRIMARY_STREAM_ID]["Flag_A"]) == [True, True]
     assert out["cutflow"]["cuts"][0]["n_unweighted_out"] == 2
+
+
+def test_cutflow_transform_defaults_to_all_filter() -> None:
+    events = ak.Array(
+        {
+            "event": [1, 2, 3, 4],
+            "pass_a": [True, True, False, False],
+            "pass_b": [True, False, True, False],
+        }
+    )
+
+    out = run_cutflow(
+        data={DEFAULT_PRIMARY_STREAM_ID: events},
+        params={"selection": {"A": ["pass_a"], "B": ["pass_b"]}},
+        ctx={
+            "primary_stream": DEFAULT_PRIMARY_STREAM_ID,
+            "node_id": "stage.RegionSelection",
+        },
+    )
+
+    selected = out[DEFAULT_PRIMARY_STREAM_ID]
+    assert ak.to_list(selected["event"]) == [1]
+    assert ak.to_list(selected["RegionSelection", "A"]) == [True]
+    assert ak.to_list(selected["RegionSelection", "B"]) == [True]
+
+
+def test_cutflow_transform_supports_explicit_all_filter() -> None:
+    events = ak.Array(
+        {
+            "event": [1, 2, 3],
+            "pass_a": [True, True, False],
+            "pass_b": [True, False, True],
+        }
+    )
+
+    out = run_cutflow(
+        data={DEFAULT_PRIMARY_STREAM_ID: events},
+        params={"filter": "all", "selection": {"A": ["pass_a"], "B": ["pass_b"]}},
+        ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
+    )
+
+    assert ak.to_list(out[DEFAULT_PRIMARY_STREAM_ID]["event"]) == [1]
+
+
+def test_cutflow_transform_supports_any_filter_and_does_not_use_last_selection() -> (
+    None
+):
+    events = ak.Array(
+        {
+            "event": [1, 2, 3, 4],
+            "pass_a": [True, True, False, False],
+            "pass_b": [True, False, True, False],
+        }
+    )
+
+    out = run_cutflow(
+        data={DEFAULT_PRIMARY_STREAM_ID: events},
+        params={"filter": "any", "selection": {"A": ["pass_a"], "B": ["pass_b"]}},
+        ctx={
+            "primary_stream": DEFAULT_PRIMARY_STREAM_ID,
+            "node_id": "stage.RegionSelection",
+        },
+    )
+
+    selected = out[DEFAULT_PRIMARY_STREAM_ID]
+    assert ak.to_list(selected["event"]) == [1, 2, 3]
+    assert ak.to_list(selected["RegionSelection", "A"]) == [True, True, False]
+    assert ak.to_list(selected["RegionSelection", "B"]) == [True, False, True]
+
+
+def test_cutflow_transform_any_filter_keeps_overlapping_events_once() -> None:
+    events = ak.Array(
+        {
+            "event": [1, 2, 3],
+            "pass_a": [True, True, False],
+            "pass_b": [True, False, True],
+        }
+    )
+
+    out = run_cutflow(
+        data={DEFAULT_PRIMARY_STREAM_ID: events},
+        params={"filter": "any", "selection": {"A": ["pass_a"], "B": ["pass_b"]}},
+        ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
+    )
+
+    assert ak.to_list(out[DEFAULT_PRIMARY_STREAM_ID]["event"]) == [1, 2, 3]
+
+
+def test_cutflow_transform_none_filter_records_cutflow_without_filtering() -> None:
+    events = ak.Array(
+        {
+            "event": [1, 2, 3],
+            "pass_a": [True, False, False],
+            "pass_b": [False, True, False],
+        }
+    )
+
+    out = run_cutflow(
+        data={DEFAULT_PRIMARY_STREAM_ID: events},
+        params={"filter": "none", "selection": {"A": ["pass_a"], "B": ["pass_b"]}},
+        ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
+    )
+
+    selected = out[DEFAULT_PRIMARY_STREAM_ID]
+    assert ak.to_list(selected["event"]) == [1, 2, 3]
+    assert out["cutflow"]["cuts"][0]["n_unweighted_out"] == 1
+    assert out["cutflow"]["cuts"][1]["n_unweighted_out"] == 1
+
+
+def test_cutflow_transform_emit_flags_can_be_disabled() -> None:
+    events = ak.Array({"event": [1, 2], "pass_a": [True, False]})
+
+    out = run_cutflow(
+        data={DEFAULT_PRIMARY_STREAM_ID: events},
+        params={
+            "emit_flags": False,
+            "filter": "none",
+            "selection": {"A": ["pass_a"]},
+        },
+        ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID, "node_id": "stage.Flags"},
+    )
+
+    assert "Flags" not in out[DEFAULT_PRIMARY_STREAM_ID].fields
+
+
+def test_cutflow_transform_combines_conditions_within_named_selection() -> None:
+    events = ak.Array(
+        {
+            "event": [1, 2, 3],
+            "pass_a": [True, True, True],
+            "pass_b": [True, False, True],
+            "pass_c": [False, True, True],
+        }
+    )
+
+    out = run_cutflow(
+        data={DEFAULT_PRIMARY_STREAM_ID: events},
+        params={"selection": {"A": ["pass_a", "pass_b", "pass_c"]}},
+        ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
+    )
+
+    assert ak.to_list(out[DEFAULT_PRIMARY_STREAM_ID]["event"]) == [3]
+    cuts = out["cutflow"]["cuts"]
+    assert [row["n_unweighted_out"] for row in cuts] == [3, 2, 1]
+
+
+def test_cutflow_transform_rejects_invalid_filter_value() -> None:
+    events = ak.Array({"event": [1], "pass_a": [True]})
+
+    with pytest.raises(ValueError, match="expected one of 'all', 'any', or 'none'"):
+        run_cutflow(
+            data={DEFAULT_PRIMARY_STREAM_ID: events},
+            params={"filter": "pass_a", "selection": {"A": ["pass_a"]}},
+            ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
+        )
+
+
+def test_cutflow_transform_rejects_conflicting_emitted_flag_field() -> None:
+    events = ak.Array(
+        {
+            "event": [1, 2],
+            "pass_a": [True, False],
+            "RegionSelection": [{"A": False}, {"A": False}],
+        }
+    )
+
+    with pytest.raises(ValueError, match="already exists"):
+        run_cutflow(
+            data={DEFAULT_PRIMARY_STREAM_ID: events},
+            params={"selection": {"A": ["pass_a"]}},
+            ctx={
+                "primary_stream": DEFAULT_PRIMARY_STREAM_ID,
+                "node_id": "stage.RegionSelection",
+            },
+        )
+
+
+def test_cutflow_transform_rejects_non_record_flag_prefix_collision() -> None:
+    events = ak.Array(
+        {
+            "event": [1, 2],
+            "pass_a": [True, False],
+            "RegionSelection": [1, 2],
+        }
+    )
+
+    with pytest.raises(ValueError, match="conflicts with existing non-record field"):
+        run_cutflow(
+            data={DEFAULT_PRIMARY_STREAM_ID: events},
+            params={"selection": {"A": ["pass_a"]}},
+            ctx={
+                "primary_stream": DEFAULT_PRIMARY_STREAM_ID,
+                "node_id": "stage.RegionSelection",
+            },
+        )
 
 
 def test_cutflow_transform_rejects_jagged_expression_mask() -> None:
@@ -177,9 +372,7 @@ def test_cutflow_transform_accepts_explicit_reduce_any_over_jagged_bool() -> Non
 
     out = run_cutflow(
         data={DEFAULT_PRIMARY_STREAM_ID: events},
-        params={
-            "selection": {"All": [{"reduce": {"op": "any", "over": "Muon_Pass"}}]}
-        },
+        params={"selection": {"All": [{"reduce": {"op": "any", "over": "Muon_Pass"}}]}},
         ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
     )
 
@@ -195,9 +388,7 @@ def test_cutflow_transform_accepts_explicit_reduce_all_over_jagged_bool() -> Non
 
     out = run_cutflow(
         data={DEFAULT_PRIMARY_STREAM_ID: events},
-        params={
-            "selection": {"All": [{"reduce": {"op": "all", "over": "Muon_Pass"}}]}
-        },
+        params={"selection": {"All": [{"reduce": {"op": "all", "over": "Muon_Pass"}}]}},
         ctx={"primary_stream": DEFAULT_PRIMARY_STREAM_ID},
     )
 
@@ -283,7 +474,9 @@ def test_cutflow_transform_can_materialize_final_selection_without_filtering() -
     assert out["cutflow"]["cuts"][-1]["selection"] == "Noise_filter_selection"
 
 
-def test_cutflow_transform_defaults_to_filtering_after_materializing_selection() -> None:
+def test_cutflow_transform_defaults_to_filtering_after_materializing_selection() -> (
+    None
+):
     events = ak.Array(
         {
             "Flag_A": [True, True, False],

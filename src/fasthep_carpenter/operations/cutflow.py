@@ -10,6 +10,7 @@ from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 from hepflow.registry.defaults import default_expr_registry
 from hepflow.runtime.engine import eval_expr
 
+from fasthep_carpenter.operations._selection import materialize_selection_flag
 from fasthep_carpenter.operations._validation import validate_event_mask
 from fasthep_carpenter.runtime.compat import (
     legacy_data_envelope,
@@ -32,7 +33,8 @@ CUTFLOW_SPEC = {
         "selection": {"type": "mapping", "required": True},
         "weight_expr": {"type": "string", "required": False},
         "output_field": {"type": "string", "required": False},
-        "filter": {"type": "boolean", "required": False},
+        "filter": {"type": "string", "required": False},
+        "emit_flags": {"type": "boolean", "required": False},
     },
     "result": {
         "stream": {"kind": "event_stream", "description": "Filtered event stream."},
@@ -111,33 +113,62 @@ def run_cutflow(
     )
     weight_expr = params.get("weight_expr", params.get("weight"))
     if isinstance(weight_expr, str):
-        w = events[weight_expr] if weight_expr in events.fields else eval_expr(events, weight_expr, ctx)
+        w = (
+            events[weight_expr]
+            if weight_expr in events.fields
+            else eval_expr(events, weight_expr, ctx)
+        )
     else:
         w = None
 
     selection = params.get("selection", {})
     initial_mask = ak.Array(np.ones(len(events), dtype=np.bool_))
-    masks_by_node: dict[str, Any] = {}
+    authored_node_id = _authored_node_id(ctx)
+    filter_mode = _filter_mode(params.get("filter", "all"))
+    emit_flags = bool(params.get("emit_flags", True))
 
     cuts = []
-    final_mask = initial_mask
+    masks_by_node: dict[str, Any] = {}
+    final_masks_by_selection: dict[str, Any] = {}
     for selection_name, steps, parents in _selection_groups(selection):
         current = _base_mask(initial_mask, parents, masks_by_node)
         for i, step in enumerate(steps):
             before = current
             step_mask = _step_mask(events, step, ctx, n_events=len(events))
             current = current & step_mask
-            node_id = f"{selection_name}[{i}]"
-            masks_by_node[node_id] = current
-            cuts.append(_cut_row(node_id, selection_name, i, step, before, current, w))
-        final_mask = current
+            cut_node_id = f"{selection_name}[{i}]"
+            masks_by_node[cut_node_id] = current
+            cuts.append(
+                _cut_row(cut_node_id, selection_name, i, step, before, current, w)
+            )
+        final_masks_by_selection[selection_name] = current
+
+    if emit_flags:
+        for selection_name, mask in final_masks_by_selection.items():
+            events = materialize_selection_flag(
+                events,
+                mask,
+                f"{authored_node_id}.{selection_name}",
+                op_name="hep.selection.cutflow",
+            )
+
+    output_mask = _combine_final_masks(
+        final_masks_by_selection,
+        initial_mask=initial_mask,
+        filter_mode="all" if filter_mode == "none" else filter_mode,
+    )
+    filter_mask = initial_mask if filter_mode == "none" else output_mask
 
     output_field = params.get("output_field")
     if isinstance(output_field, str) and output_field:
-        events = ak.with_field(events, final_mask, output_field)
+        events = materialize_selection_flag(
+            events,
+            output_mask,
+            output_field,
+            op_name="hep.selection.cutflow",
+        )
 
-    should_filter = bool(params.get("filter", True))
-    filtered = events[final_mask] if should_filter else events
+    filtered = events if filter_mode == "none" else events[filter_mask]
     return {DEFAULT_PRIMARY_STREAM_ID: filtered, "cutflow": {"cuts": cuts}}
 
 
@@ -159,7 +190,8 @@ def run_cutflow_transform(
         legacy_params["weight_expr"] = weight_expr
     if output_field is not None:
         legacy_params["output_field"] = output_field
-    legacy_params["filter"] = kwargs.pop("filter", True)
+    legacy_params["filter"] = kwargs.pop("filter", "all")
+    legacy_params["emit_flags"] = kwargs.pop("emit_flags", True)
     legacy_ctx = ctx or {}
     if "primary_stream" not in legacy_ctx:
         legacy_ctx["primary_stream"] = DEFAULT_PRIMARY_STREAM_ID
@@ -223,6 +255,47 @@ def _parent_ids(value: Any) -> list[str]:
     if isinstance(value, list | tuple):
         return [str(item) for item in value if str(item)]
     return [str(value)]
+
+
+def _authored_node_id(ctx: dict[str, Any]) -> str:
+    node_id = str(ctx.get("node_id") or ctx.get("stage_id") or "selection")
+    return node_id.removeprefix("stage.") or "selection"
+
+
+def _filter_mode(value: Any) -> str:
+    if value is True:
+        return "all"
+    if value is False:
+        return "none"
+    if value is None:
+        return "all"
+    mode = str(value).strip().lower()
+    if mode in {"all", "any", "none"}:
+        return mode
+    raise ValueError(
+        "Unsupported hep.selection.cutflow filter value "
+        f"{value!r}; expected one of 'all', 'any', or 'none'."
+    )
+
+
+def _combine_final_masks(
+    masks: dict[str, Any],
+    *,
+    initial_mask: Any,
+    filter_mode: str,
+) -> Any:
+    if filter_mode == "none" or not masks:
+        return initial_mask
+
+    combined = None
+    for mask in masks.values():
+        if combined is None:
+            combined = mask
+        elif filter_mode == "any":
+            combined = combined | mask
+        else:
+            combined = combined & mask
+    return initial_mask if combined is None else combined
 
 
 def _base_mask(
