@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from pathlib import Path
 from typing import Any
 
@@ -104,7 +105,7 @@ def run_root_tree_write(
         elif output_format == "ttree":
             fout.mktree(tree, payload)
 
-    root_classname = _root_classname(output_path, tree)
+    root_classname = _root_classname(output_format)
 
     entries = _safe_len(array)
     manifest_record = _manifest_record(
@@ -117,7 +118,9 @@ def run_root_tree_write(
         meta=dict(meta or {}),
     )
 
-    return OutputResult(
+    runtime_ctx = dict(ctx or {})
+    runtime_meta = dict(meta or {})
+    result = OutputResult(
         kind="artifact",
         path=str(output_path),
         format="root",
@@ -129,9 +132,16 @@ def run_root_tree_write(
             "branches": list(array.fields),
             "compression": compression,
             "compression_level": compression_level,
+            "partition_context": dict(runtime_ctx.get("partition") or {}),
             "writer_manifest": manifest_record,
         },
     )
+    _set_reference_field(result, "producer_node", str(runtime_meta.get("node_id") or ""))
+    _set_reference_field(result, "output_name", "artifact")
+    _set_reference_field(result, "dataset_name", manifest_record["dataset"])
+    _set_reference_field(result, "partition_id", manifest_record.get("partition_id"))
+    _set_reference_field(result, "partition_index", manifest_record["partition"])
+    return result
 
 
 def _manifest_record(
@@ -160,6 +170,7 @@ def _manifest_record(
         "path": path,
         "path_type": path_type,
         "dataset": str(ctx.get("dataset_name") or partition.get("dataset") or "dataset"),
+        "partition_id": partition.get("id"),
         "partition": _partition_index(partition),
         "attempt": int(ctx.get("attempt") or 0),
         "entries": entries,
@@ -174,6 +185,11 @@ def manifest_path(path: Path, outdir: Path) -> tuple[str, str]:
         return resolved.relative_to(resolved_outdir).as_posix(), "relative_to_outdir"
     except ValueError:
         return resolved.as_posix(), "absolute"
+
+
+def _set_reference_field(result: OutputResult, name: str, value: Any) -> None:
+    with suppress(AttributeError):
+        setattr(result, name, value)
 
 
 def _partition_index(partition: dict[str, Any]) -> int:
@@ -219,9 +235,10 @@ def _normalise_format(name: str) -> str:
     )
 
 
-def _root_classname(path: Path, tree: str) -> str:
-    with uproot.open(path) as root_file:
-        return str(root_file[tree].classname)
+def _root_classname(output_format: str) -> str:
+    if output_format == "rntuple":
+        return "ROOT::RNTuple"
+    return "TTree"
 
 
 def _safe_len(array: ak.Array) -> int | None:

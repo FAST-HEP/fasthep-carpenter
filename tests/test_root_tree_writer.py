@@ -7,12 +7,17 @@ import numpy as np
 import pytest
 import uproot
 
+import fasthep_carpenter.sinks.root_tree as root_tree_sink
 from fasthep_carpenter.sinks.root_tree import run_root_tree_write
 
 
 def test_default_root_tree_writer_outputs_rntuple(tmp_path: Path) -> None:
     result = run_root_tree_write(_payload(), path=str(tmp_path / "default.root"))
+    reference = getattr(result, "uri", result.path)
 
+    assert reference == str(tmp_path / "default.root")
+    assert getattr(result, "output_name", None) == "artifact"
+    assert getattr(result, "dataset_name", None) == "dataset"
     assert result.metadata["format"] == "rntuple"
     assert result.metadata["root_classname"] == "ROOT::RNTuple"
     assert _classname(tmp_path / "default.root") == "ROOT::RNTuple"
@@ -70,6 +75,21 @@ def test_explicit_root_tree_format_round_trips_scalar_and_jagged_branches(
 def test_root_tree_writer_rejects_invalid_format(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="Unsupported ROOT output format"):
         run_root_tree_write(_payload(), path=str(tmp_path / "bad.root"), format="root")
+
+
+def test_root_tree_writer_does_not_reopen_output_to_build_reference(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def fail_open(*args, **kwargs):
+        del args, kwargs
+        raise AssertionError("writer should not reopen artifact")
+
+    monkeypatch.setattr(root_tree_sink.uproot, "open", fail_open)
+
+    result = run_root_tree_write(_payload(), path=str(tmp_path / "reference.root"))
+
+    assert result.metadata["root_classname"] == "ROOT::RNTuple"
 
 
 def _payload() -> ak.Array:
