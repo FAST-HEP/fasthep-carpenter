@@ -90,13 +90,22 @@ registry:
 
   product_handlers:
     event_stream:
+      boundary:
+        retain: false
+        representation: value
       merge: fasthep_carpenter.products:merge_event_streams
 
     histogram:
+      boundary:
+        retain: true
+        representation: value
       merge: fasthep_carpenter.products:merge_histogram_products
       materialize: fasthep_carpenter.products:materialize_histogram_product
 
     cutflow:
+      boundary:
+        retain: true
+        representation: value
       merge: fasthep_carpenter.products:merge_cutflow_products
       materialize: fasthep_carpenter.products:materialize_cutflow_product
 

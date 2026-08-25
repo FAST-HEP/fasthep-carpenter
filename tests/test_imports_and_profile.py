@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 import importlib.resources as resources
+from typing import Any, cast
 
 import yaml
-from hepflow.registry.loaders import load_object
+from hepflow.registry.loaders import load_object, resolve_runtime_registry
 
 import fasthep_carpenter
 
@@ -88,3 +89,14 @@ def test_registry_objects_resolve_from_new_layout() -> None:
         assert callable(load_object(entry["merge"]))
         if "materialize" in entry:
             assert callable(load_object(entry["materialize"]))
+
+    runtime_registry = resolve_runtime_registry(registry)
+    assert _boundary_policy(runtime_registry, "event_stream") == (False, "value")
+    assert _boundary_policy(runtime_registry, "histogram") == (True, "value")
+    assert _boundary_policy(runtime_registry, "cutflow") == (True, "value")
+
+
+def _boundary_policy(runtime_registry: object, name: str) -> tuple[bool, str]:
+    registry = cast(Any, runtime_registry)
+    policy = registry.product_handlers[name].boundary
+    return bool(policy.retain), str(policy.representation)
