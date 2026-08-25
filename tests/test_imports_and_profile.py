@@ -86,6 +86,8 @@ def test_registry_objects_resolve_from_new_layout() -> None:
             assert callable(load_object(entry["impl"]))
 
     for entry in registry["product_handlers"].values():
+        if "combine" in entry:
+            assert callable(load_object(entry["combine"]))
         assert callable(load_object(entry["merge"]))
         if "materialize" in entry:
             assert callable(load_object(entry["materialize"]))
@@ -94,6 +96,10 @@ def test_registry_objects_resolve_from_new_layout() -> None:
     assert _boundary_policy(runtime_registry, "event_stream") == (False, "value")
     assert _boundary_policy(runtime_registry, "histogram") == (True, "value")
     assert _boundary_policy(runtime_registry, "cutflow") == (True, "value")
+    product_handlers = cast(Any, runtime_registry.product_handlers)
+    assert product_handlers["event_stream"].combine is None
+    assert callable(product_handlers["histogram"].combine)
+    assert callable(product_handlers["cutflow"].combine)
 
 
 def _boundary_policy(runtime_registry: object, name: str) -> tuple[bool, str]:

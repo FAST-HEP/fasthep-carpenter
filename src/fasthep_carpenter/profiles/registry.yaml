@@ -99,6 +99,7 @@ registry:
       boundary:
         retain: true
         representation: value
+      combine: fasthep_carpenter.products:combine_histogram_products
       merge: fasthep_carpenter.products:merge_histogram_products
       materialize: fasthep_carpenter.products:materialize_histogram_product
 
@@ -106,6 +107,7 @@ registry:
       boundary:
         retain: true
         representation: value
+      combine: fasthep_carpenter.products:combine_cutflow_products
       merge: fasthep_carpenter.products:merge_cutflow_products
       materialize: fasthep_carpenter.products:materialize_cutflow_product
 

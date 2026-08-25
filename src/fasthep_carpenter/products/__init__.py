@@ -44,6 +44,18 @@ def merge_histogram_products(
     return acc
 
 
+def combine_histogram_products(
+    left: Any,
+    right: Any,
+    *,
+    node: Any,
+    output_name: str,
+    dataset_name: str | None = None,
+) -> Any:
+    del node, output_name, dataset_name
+    return left + right
+
+
 def materialize_histogram_product(
     value: Any,
     *,
@@ -110,6 +122,22 @@ def merge_cutflow_products(
     if dataset_name is not None:
         merged["dataset"] = dataset_name
     return merged
+
+
+def combine_cutflow_products(
+    left: dict[str, Any],
+    right: dict[str, Any],
+    *,
+    node: Any,
+    output_name: str,
+    dataset_name: str | None = None,
+) -> dict[str, Any]:
+    return merge_cutflow_products(
+        [left, right],
+        node=node,
+        output_name=output_name,
+        dataset_name=dataset_name,
+    )
 
 
 def _all_canonical_cutflows(values: list[dict[str, Any]]) -> bool:

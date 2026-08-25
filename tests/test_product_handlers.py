@@ -8,10 +8,13 @@ from hepflow.model.plan import ExecutionNode
 from hepflow.utils import read_pickle
 
 from fasthep_carpenter.products import (
+    combine_cutflow_products,
+    combine_histogram_products,
     materialize_cutflow_product,
     materialize_histogram_product,
     merge_cutflow_products,
     merge_event_streams,
+    merge_histogram_products,
 )
 
 
@@ -264,6 +267,72 @@ def test_cutflow_product_handler_merges_canonical_graphs_by_dataset() -> None:
         "sumw2_out": 8.0,
     }
     assert stats["dy"]["n_out"] == 12.0
+
+
+def test_histogram_product_handler_pairwise_combine_matches_batch_merge() -> None:
+    node = ExecutionNode(
+        id="stage.NumberMuons",
+        graph_node_id="stage.NumberMuons",
+        role="transform",
+        impl="hep.hist",
+        outputs={"hist": "histogram"},
+    )
+    values = [1, 2, 3, 4]
+
+    combined = values[0]
+    for value in values[1:]:
+        combined = combine_histogram_products(
+            combined,
+            value,
+            node=node,
+            output_name="hist",
+            dataset_name="data",
+        )
+
+    assert combined == merge_histogram_products(
+        values,
+        node=node,
+        output_name="hist",
+        dataset_name="data",
+    )
+
+
+def test_cutflow_product_handler_pairwise_combine_matches_batch_merge() -> None:
+    node = _cutflow_node()
+    values = [
+        _canonical_cutflow(
+            dataset="data",
+            n_in=10.0,
+            n_out=5.0,
+            n_unweighted_in=10,
+            n_unweighted_out=5,
+        ),
+        _canonical_cutflow(
+            dataset="data",
+            n_in=2.0,
+            n_out=1.5,
+            n_unweighted_in=4,
+            n_unweighted_out=3,
+        ),
+        _canonical_cutflow(
+            dataset="dy",
+            n_in=20.0,
+            n_out=12.0,
+            n_unweighted_in=40,
+            n_unweighted_out=24,
+        ),
+    ]
+
+    combined = values[0]
+    for value in values[1:]:
+        combined = combine_cutflow_products(
+            combined,
+            value,
+            node=node,
+            output_name="cutflow",
+        )
+
+    assert combined == merge_cutflow_products(values, node=node, output_name="cutflow")
 
 
 def _cutflow_node() -> ExecutionNode:
