@@ -30,7 +30,9 @@ NEW_LINEAGE_DEFINE_SPEC = {
 }
 
 
-def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path) -> None:
+def test_compile_resolves_root_tree_source_from_carpenter_profile(
+    tmp_path: Path,
+) -> None:
     compile_workflow_file = _hepflow_api().compile_workflow_file
     workflow_path = tmp_path / "workflow.yaml"
     workflow = {
@@ -69,7 +71,9 @@ def test_compile_resolves_root_tree_source_from_carpenter_profile(tmp_path: Path
             ],
         },
     }
-    workflow_path.write_text(yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8")
+    workflow_path.write_text(
+        yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8"
+    )
 
     plan = compile_workflow_file(workflow_path, outdir=tmp_path / "build")
 
@@ -128,7 +132,9 @@ def test_define_variables_expand_mapping_matrix_before_plan(tmp_path: Path) -> N
             ]
         },
     }
-    workflow_path.write_text(yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8")
+    workflow_path.write_text(
+        yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8"
+    )
 
     plan = compile_workflow_file(workflow_path, outdir=tmp_path / "build")
 
@@ -310,7 +316,9 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
             ],
         },
     }
-    workflow_path.write_text(yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8")
+    workflow_path.write_text(
+        yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8"
+    )
     build_dir = tmp_path / "build"
 
     result = run_workflow_file(workflow_path, outdir=build_dir, chunk_size=2)
@@ -440,7 +448,9 @@ def test_histogram_loads_unlisted_axis_and_weight_fields(tmp_path: Path) -> None
             ],
         },
     }
-    workflow_path.write_text(yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8")
+    workflow_path.write_text(
+        yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8"
+    )
     build_dir = tmp_path / "build"
 
     plan = compile_workflow_file(workflow_path, outdir=build_dir)
@@ -562,6 +572,179 @@ def test_clean_params_collection_references_are_visible_to_data_flow(
     ]
 
 
+def test_choose_outputs_resolve_to_produced_fields_for_downstream_consumers(
+    tmp_path: Path,
+) -> None:
+    workflow = {
+        "version": "1.0",
+        "use": {
+            "profiles": [
+                "registry",
+                "fasthep_carpenter:registry",
+            ],
+        },
+        "data": {
+            "datasets": [
+                {"name": "sample", "files": ["sample.root"], "eventtype": "mc"}
+            ]
+        },
+        "sources": {
+            "events": {
+                "kind": "root_tree",
+                "tree": "Events",
+                "stream_type": "event_stream",
+            },
+        },
+        "analysis": {
+            "stages": [
+                {
+                    "id": "ChooseRecoil",
+                    "op": "hep.choose",
+                    "params": {
+                        "cases": [
+                            {
+                                "name": "muon",
+                                "when": "SingleMuon_CR_selection",
+                                "values": {
+                                    "Recoil_pt": ("leading(muon_recoil_pt, -999.0)"),
+                                    "Recoil_phi": ("leading(muon_recoil_phi, -999.0)"),
+                                },
+                            },
+                            {
+                                "name": "electron",
+                                "when": "SingleElectron_CR_selection",
+                                "values": {
+                                    "Recoil_pt": (
+                                        "leading(electron_recoil_pt, -999.0)"
+                                    ),
+                                    "Recoil_phi": (
+                                        "leading(electron_recoil_phi, -999.0)"
+                                    ),
+                                },
+                            },
+                        ],
+                        "default": {"Recoil_pt": "-999.0", "Recoil_phi": "-999.0"},
+                        "on_no_match": "default",
+                    },
+                },
+                {
+                    "id": "DefineAngularVariables",
+                    "op": "hep.define",
+                    "needs": ["ChooseRecoil"],
+                    "params": {
+                        "variables": [
+                            {
+                                "name": "dPhi_Recoil_MHT",
+                                "expr": "abs(Recoil_phi - MHT_phi)",
+                            }
+                        ]
+                    },
+                },
+                {
+                    "id": "RecoilDebug",
+                    "op": "hep.hist",
+                    "needs": ["ChooseRecoil"],
+                    "params": {
+                        "axes": [
+                            {
+                                "name": "recoil_phi",
+                                "source": "Recoil_phi",
+                                "type": "regular",
+                                "bins": {"low": -4, "high": 4, "nbins": 15},
+                            }
+                        ]
+                    },
+                },
+            ],
+        },
+    }
+
+    plan = _compile_workflow_dict(tmp_path, workflow)
+
+    assert plan.data_flow["origins"]["Recoil_pt"] == {
+        "kind": "produced",
+        "node": "stage.ChooseRecoil",
+    }
+    assert plan.data_flow["origins"]["Recoil_phi"] == {
+        "kind": "produced",
+        "node": "stage.ChooseRecoil",
+    }
+    assert plan.data_flow["consumers"]["Recoil_phi"] == [
+        "stage.DefineAngularVariables",
+        "stage.RecoilDebug",
+    ]
+    assert "Recoil_pt" not in plan.get_node("read.events").params["branches"]
+    assert "Recoil_phi" not in plan.get_node("read.events").params["branches"]
+    assert plan.get_node("stage.DefineAngularVariables").inputs[0].node_id == (
+        "stage.ChooseRecoil"
+    )
+    assert plan.get_node("stage.RecoilDebug").inputs[0].node_id == "stage.ChooseRecoil"
+
+
+def test_choose_inconsistent_output_sets_fail_compile_with_node_and_field(
+    tmp_path: Path,
+) -> None:
+    workflow = {
+        "version": "1.0",
+        "use": {
+            "profiles": [
+                "registry",
+                "fasthep_carpenter:registry",
+            ],
+        },
+        "data": {
+            "datasets": [
+                {"name": "sample", "files": ["sample.root"], "eventtype": "mc"}
+            ]
+        },
+        "sources": {
+            "events": {
+                "kind": "root_tree",
+                "tree": "Events",
+                "stream_type": "event_stream",
+            },
+        },
+        "analysis": {
+            "stages": [
+                {
+                    "id": "ChooseRecoil",
+                    "op": "hep.choose",
+                    "params": {
+                        "cases": [
+                            {
+                                "name": "muon",
+                                "when": "SingleMuon_CR_selection",
+                                "values": {
+                                    "Recoil_pt": "leading(muon_recoil_pt, -999.0)",
+                                },
+                            },
+                            {
+                                "name": "electron",
+                                "when": "SingleElectron_CR_selection",
+                                "values": {
+                                    "Recoil_pt": (
+                                        "leading(electron_recoil_pt, -999.0)"
+                                    ),
+                                    "Recoil_phi": (
+                                        "leading(electron_recoil_phi, -999.0)"
+                                    ),
+                                },
+                            },
+                        ],
+                    },
+                },
+            ],
+        },
+    }
+
+    with pytest.raises(ValueError, match=r"stage\.ChooseRecoil") as excinfo:
+        _compile_workflow_dict(tmp_path, workflow)
+
+    message = str(excinfo.value)
+    assert "Recoil_phi" in message
+    assert "inconsistent outputs" in message
+
+
 def test_manifest_path_uses_relative_path_for_output_below_outdir(
     tmp_path: Path,
 ) -> None:
@@ -651,7 +834,9 @@ def test_root_tree_source_metadata_only_does_not_call_arrays(monkeypatch) -> Non
             }
 
         def arrays(self, *args: Any, **kwargs: Any) -> None:
-            raise AssertionError("metadata-only schema inspection must not call arrays()")
+            raise AssertionError(
+                "metadata-only schema inspection must not call arrays()"
+            )
 
     class FakeFile:
         def __enter__(self) -> dict[str, FakeTree]:
@@ -778,7 +963,9 @@ def _compile_merge_workflow(
 def _compile_workflow_dict(tmp_path: Path, workflow: dict[str, Any]) -> Any:
     compile_workflow_file = _hepflow_api().compile_workflow_file
     workflow_path = tmp_path / "workflow.yaml"
-    workflow_path.write_text(yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8")
+    workflow_path.write_text(
+        yaml.safe_dump(workflow, sort_keys=False), encoding="utf-8"
+    )
     return compile_workflow_file(workflow_path, outdir=tmp_path / "build")
 
 

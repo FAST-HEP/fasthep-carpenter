@@ -54,7 +54,13 @@ def parse_choose_column_dependencies(
     context_symbols: set[str],
 ) -> DataDependencyResult:
     result = DataDependencyResult()
-    produced = set(_output_names(params.get("cases")))
+    cases = _case_specs(params.get("cases"))
+    on_no_match = _policy(
+        params.get("on_no_match", "error"),
+        allowed={"error", "default"},
+        name="on_no_match",
+    )
+    produced = set(_validate_output_contract(cases, params, on_no_match=on_no_match))
     result.produces.update(produced)
 
     def add_expr(expr: Any) -> None:
@@ -70,7 +76,7 @@ def parse_choose_column_dependencies(
             )
         )
 
-    for case in _case_specs(params.get("cases")):
+    for case in cases:
         add_expr(case["when"])
         for expr in case["values"].values():
             add_expr(expr)
@@ -223,9 +229,10 @@ def _validate_output_contract(
         if names != set(output_names):
             missing = sorted(set(output_names) - names)
             extra = sorted(names - set(output_names))
+            fields = sorted(set(missing) | set(extra))
             raise ValueError(
                 f"hep.choose case {_case_label(case, index)} has inconsistent "
-                f"outputs; missing={missing}, extra={extra}"
+                f"outputs for field(s) {fields}; missing={missing}, extra={extra}"
             )
 
     if on_no_match == "default":
@@ -238,16 +245,27 @@ def _validate_output_contract(
         if default_names != set(output_names):
             missing = sorted(set(output_names) - default_names)
             extra = sorted(default_names - set(output_names))
+            fields = sorted(set(missing) | set(extra))
             raise ValueError(
                 "hep.choose default has inconsistent outputs; "
-                f"missing={missing}, extra={extra}"
+                f"field(s) {fields}; missing={missing}, extra={extra}"
             )
     return output_names
 
 
 def _output_names(cases: Any) -> list[str]:
     case_specs = _case_specs(cases)
-    return list(case_specs[0]["values"])
+    output_names: list[str] = []
+    seen: set[str] = set()
+    for case in case_specs:
+        for name in case["values"]:
+            if not isinstance(name, str) or not name.strip():
+                raise ValueError("hep.choose output names must be non-empty strings")
+            normalized = name.strip()
+            if normalized not in seen:
+                seen.add(normalized)
+                output_names.append(normalized)
+    return output_names
 
 
 def _mapping_keys(value: dict[str, Any]) -> set[str]:

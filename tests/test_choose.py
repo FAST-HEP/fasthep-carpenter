@@ -269,6 +269,82 @@ def test_choose_dependency_parser_consumes_when_values_and_defaults() -> None:
     assert deps.produces == {"pt", "phi"}
 
 
+def test_choose_dependency_parser_derives_outputs_from_all_case_values() -> None:
+    deps = parse_component_data_dependencies(
+        spec=CHOOSE_SPEC,
+        params={
+            "cases": [
+                {
+                    "name": "muon",
+                    "when": "SingleMuon_CR_selection",
+                    "values": {
+                        "Recoil_pt": "leading(muon_recoil_pt, -999.0)",
+                        "Recoil_phi": "leading(muon_recoil_phi, -999.0)",
+                    },
+                },
+                {
+                    "name": "electron",
+                    "when": "SingleElectron_CR_selection",
+                    "values": {
+                        "Recoil_phi": "leading(electron_recoil_phi, -999.0)",
+                        "Recoil_pt": "leading(electron_recoil_pt, -999.0)",
+                    },
+                },
+            ],
+            "default": {"Recoil_pt": "-999.0", "Recoil_phi": "-999.0"},
+            "on_no_match": "default",
+        },
+        dep_ctx=DependencyContext(
+            known_functions={"leading"},
+            known_constants=set(),
+            context_symbols=set(),
+        ),
+    )
+
+    assert deps.produces == {"Recoil_pt", "Recoil_phi"}
+    assert deps.consumes == {
+        "SingleMuon_CR_selection",
+        "SingleElectron_CR_selection",
+        "muon_recoil_pt",
+        "muon_recoil_phi",
+        "electron_recoil_pt",
+        "electron_recoil_phi",
+    }
+    assert "Recoil_pt" not in deps.consumes
+    assert "Recoil_phi" not in deps.consumes
+
+
+def test_choose_dependency_parser_rejects_mismatched_case_outputs() -> None:
+    with pytest.raises(ValueError, match="Recoil_phi"):
+        parse_component_data_dependencies(
+            spec=CHOOSE_SPEC,
+            params={
+                "cases": [
+                    {
+                        "name": "muon",
+                        "when": "SingleMuon_CR_selection",
+                        "values": {
+                            "Recoil_pt": "leading(muon_recoil_pt, -999.0)",
+                        },
+                    },
+                    {
+                        "name": "electron",
+                        "when": "SingleElectron_CR_selection",
+                        "values": {
+                            "Recoil_pt": "leading(electron_recoil_pt, -999.0)",
+                            "Recoil_phi": "leading(electron_recoil_phi, -999.0)",
+                        },
+                    },
+                ],
+            },
+            dep_ctx=DependencyContext(
+                known_functions={"leading"},
+                known_constants=set(),
+                context_symbols=set(),
+            ),
+        )
+
+
 def test_choose_rejects_existing_output_collision() -> None:
     with pytest.raises(ValueError, match="overwrite existing stream field"):
         _run_choose(
