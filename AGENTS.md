@@ -123,3 +123,10 @@ use environment-qualified runs for Python-version, GPU or docs-specific work.
 - Build outputs, ROOT outputs, compiled workflow artifacts and generated docs
   are products of tests or workflows. Do not check them in unless they are
   intentional fixtures.
+
+## Documentation and Changelog
+
+User-facing changes — new features, behavior changes, bug fixes, breaking changes — must add an
+entry to `CHANGELOG.md` under `## [Unreleased]`, in the matching [Keep a
+Changelog](https://keepachangelog.com/en/1.1.0/) category (Added, Changed, Deprecated, Removed,
+Fixed, Security). This repository has no `docs/` yet.
