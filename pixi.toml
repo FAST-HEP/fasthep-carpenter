@@ -19,7 +19,7 @@ vector = "*"
 
 [pypi-dependencies]
 fasthep-carpenter = { path = ".", editable = true }
-fasthep-flow = ">=2026.5.0"
+fasthep-flow = ">=2026.10.1"
 vulture = ">=2.16, <3"
 deptry = ">=0.25.1, <0.26"
 
