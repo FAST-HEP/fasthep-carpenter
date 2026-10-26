@@ -355,7 +355,7 @@ def test_align_schema_external_schema_is_loaded_during_workflow_normalization(
         encoding="utf-8",
     )
 
-    normalized = normalise_workflow_file(workflow_path, outdir=tmp_path / "build")
+    normalized = normalise_workflow_file(workflow_path, outdir=tmp_path / "build", root=tmp_path)
     assert normalized["analysis"]["stages"][0]["params"]["schema"] == (
         "schemas/schema.yaml"
     )
@@ -602,7 +602,7 @@ def _compiled_external_align_params(tmp_path: Path, schema_path: Path) -> dict[s
         ),
         encoding="utf-8",
     )
-    normalized = normalise_workflow_file(workflow_path, outdir=tmp_path / "build")
+    normalized = normalise_workflow_file(workflow_path, outdir=tmp_path / "build", root=tmp_path)
     _, plan = build_plan_from_normalized(normalized)
     return dict(plan.get_node("stage.Align").params)
 
