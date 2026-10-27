@@ -12,9 +12,6 @@ Add new entries under `## [Unreleased]`, in the category they belong to. At rele
 
 ### Fixed
 
-- `hep.choose` now registers all declared output fields as products, not just the ones a branch
-  actually writes.
-- Selection: cutflow masks are now combined explicitly instead of relying on implicit combination.
 - Cutflow merging across three or more datasets no longer collapses most datasets into a single
   `"default"` bucket with zeroed stats. `merge_cutflow_products` only correctly read a raw
   single-dataset dict's `"dataset"`/`"cuts"` fields; once hepflow's runtime folds per-dataset
@@ -22,6 +19,14 @@ Add new entries under `## [Unreleased]`, in the category they belong to. At rele
   multi-dataset graph (no top-level `"dataset"`/`"cuts"`) with a new raw dict, and only the newest
   dataset survived. Affects any workflow with partitioned/chunked execution across 3+ datasets
   (for example `fasthep-workshop`'s `99-extras/partitioned-root-skim` tutorial).
+
+## [2026.10.1] - 2026-10-26
+
+### Fixed
+
+- `hep.choose` now registers all declared output fields as products, not just the ones a branch
+  actually writes.
+- Selection: cutflow masks are now combined explicitly instead of relying on implicit combination.
 
 ## [2026.08.2] - 2026-08-25
 
