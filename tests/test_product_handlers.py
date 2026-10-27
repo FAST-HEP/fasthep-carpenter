@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 import awkward as ak
 from hepflow.model.plan import ExecutionNode
@@ -224,7 +225,7 @@ def test_cutflow_product_handler_preserves_dataset_identity_folded_pairwise_acro
     # accumulator folds them in one at a time via combine_cutflow_products(dataset_name=None),
     # not as a single batch merge_cutflow_products(...) call.
     node = _cutflow_node()
-    raw_values = [
+    raw_values: list[dict[str, Any]] = [
         {
             "dataset": "data",
             "cuts": [
