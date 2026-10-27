@@ -216,6 +216,64 @@ def test_cutflow_product_handler_preserves_dataset_identity_at_final_merge() -> 
     assert merged["nodes"][0]["stats"]["dy"]["n_out"] == 12.0
 
 
+def test_cutflow_product_handler_preserves_dataset_identity_folded_pairwise_across_three() -> (
+    None
+):
+    # Mirrors hepflow's runtime.boundary.ProductAccumulator.add_value_store: each
+    # per-dataset result is a raw (non-canonical) cutflow dict, and the global
+    # accumulator folds them in one at a time via combine_cutflow_products(dataset_name=None),
+    # not as a single batch merge_cutflow_products(...) call.
+    node = _cutflow_node()
+    raw_values = [
+        {
+            "dataset": "data",
+            "cuts": [
+                {
+                    "name": "All[0]",
+                    "n_in": 10.0,
+                    "n_out": 5.0,
+                    "n_unweighted_in": 10,
+                    "n_unweighted_out": 5,
+                }
+            ],
+        },
+        {
+            "dataset": "dy",
+            "cuts": [
+                {
+                    "name": "All[0]",
+                    "n_in": 20.0,
+                    "n_out": 12.0,
+                    "n_unweighted_in": 40,
+                    "n_unweighted_out": 24,
+                }
+            ],
+        },
+        {
+            "dataset": "qcd",
+            "cuts": [
+                {
+                    "name": "All[0]",
+                    "n_in": 2.0,
+                    "n_out": 1.0,
+                    "n_unweighted_in": 2,
+                    "n_unweighted_out": 1,
+                }
+            ],
+        },
+    ]
+
+    combined = raw_values[0]
+    for value in raw_values[1:]:
+        combined = combine_cutflow_products(combined, value, node=node, output_name="cutflow")
+
+    assert set(combined["datasets"]) == {"data", "dy", "qcd"}
+    assert "default" not in combined["datasets"]
+    assert combined["nodes"][0]["stats"]["data"]["n_out"] == 5.0
+    assert combined["nodes"][0]["stats"]["dy"]["n_out"] == 12.0
+    assert combined["nodes"][0]["stats"]["qcd"]["n_out"] == 1.0
+
+
 def test_cutflow_product_handler_merges_canonical_graphs_by_dataset() -> None:
     node = _cutflow_node()
 

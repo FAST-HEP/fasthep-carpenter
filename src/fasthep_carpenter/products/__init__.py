@@ -93,11 +93,25 @@ def merge_cutflow_products(
         return _merge_canonical_cutflows(values, producer_id=node.id)
 
     if dataset_name is None and any("dataset" in value for value in values):
-        return canonical_cutflow_graph(
-            producer_id=node.id,
-            params=dict(node.params or {}),
-            product={"cutflows": values},
-        )
+        # `values` can mix raw single-dataset dicts (one per dataset's own partition
+        # merge) with an already-canonical multi-dataset graph (an earlier fold of
+        # this same reduction, as hepflow's ProductAccumulator does when it combines
+        # per-dataset results into the global one pairwise). canonical_cutflow_graph
+        # only knows how to read a raw dict's "dataset"/"cuts" shape, so folding a
+        # canonical graph straight into it would lose every dataset already merged
+        # into that graph. Normalise each raw entry to its own canonical graph first,
+        # leaving already-canonical entries as they are, then merge canonicals.
+        normalized = [
+            value
+            if _all_canonical_cutflows([value])
+            else canonical_cutflow_graph(
+                producer_id=node.id,
+                params=dict(node.params or {}),
+                product={"cutflows": [value]},
+            )
+            for value in values
+        ]
+        return _merge_canonical_cutflows(normalized, producer_id=node.id)
 
     out_by_name: dict[str, dict[str, Any]] = {}
     for cutflow in values:
