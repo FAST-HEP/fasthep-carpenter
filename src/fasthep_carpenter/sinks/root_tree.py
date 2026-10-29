@@ -165,8 +165,21 @@ def _group_by_collection(payload: dict[str, ak.Array]) -> dict[str, Any]:
         if collection and attribute and _is_jagged_numeric(values):
             members.setdefault(collection, []).append((attribute, values))
 
+    # A branch already named like the counter (a compatibility schema can carry the legacy
+    # counter) is replaced by the written counter if it holds the same lengths; otherwise the
+    # collection is not grouped, so the two cannot clash.
+    replaced: set[str] = set()
+    for collection, entries in list(members.items()):
+        counter = f"n{collection}"
+        if counter not in payload:
+            continue
+        if _same_counts(payload[counter], ak.num(entries[0][1])):
+            replaced.add(counter)
+        else:
+            del members[collection]
+
     grouped: dict[str, Any] = {}
-    placed: set[str] = set()
+    placed: set[str] = set(replaced)
     for name, values in payload.items():
         if name in placed:
             continue
@@ -179,12 +192,18 @@ def _group_by_collection(payload: dict[str, ak.Array]) -> dict[str, Any]:
         fields = {
             attr: arr for attr, arr in group if ak.all(ak.num(arr) == reference)
         }
-        if name.rpartition("_")[2] not in fields:
+        if attribute not in fields:
             grouped[name] = values
             continue
         grouped[collection] = ak.zip(fields)
         placed.update(f"{collection}_{attr}" for attr in fields)
     return grouped
+
+
+def _same_counts(values: ak.Array, counts: ak.Array) -> bool:
+    if not isinstance(ak.type(values).content, ak.types.NumpyType):
+        return False
+    return bool(ak.all(values == counts))
 
 
 def _is_jagged_numeric(values: ak.Array) -> bool:

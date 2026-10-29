@@ -222,3 +222,50 @@ def test_only_numeric_jagged_branches_are_grouped_under_a_counter() -> None:
     assert root_tree_sink._is_jagged_numeric(ak.Array([[1.0], []])) is True
     assert root_tree_sink._is_jagged_numeric(ak.Array([["a"], ["b"]])) is False
     assert root_tree_sink._is_jagged_numeric(ak.Array([1.0, 2.0])) is False
+
+
+def test_shared_counters_reuse_an_existing_counter_branch_of_the_same_lengths(
+    tmp_path: Path,
+) -> None:
+    # Compatibility schemas can already carry the legacy counter (nSR) as a field.
+    payload = ak.with_field(
+        _collection_payload(), ak.Array(np.array([2, 1, 0], dtype=np.int32)), "nSR"
+    )
+    output_path = tmp_path / "existing_counter.root"
+
+    run_root_tree_write(
+        payload,
+        path=str(output_path),
+        tree="Events",
+        format="ttree",
+        shared_counters=True,
+    )
+
+    with uproot.open(output_path) as root_file:
+        tree = root_file["Events"]
+        assert {"event", "nSR", "SR_pt", "SR_eta", "SR_selection", "nJet", "Jet_pt"} == set(
+            tree.keys()
+        )
+        assert tree["nSR"].array(library="np").tolist() == [2, 1, 0]
+
+
+def test_shared_counters_keep_an_existing_branch_that_is_not_the_counter(
+    tmp_path: Path,
+) -> None:
+    payload = ak.with_field(
+        _collection_payload(), ak.Array(np.array([7, 7, 7], dtype=np.int32)), "nSR"
+    )
+    output_path = tmp_path / "unrelated_n_branch.root"
+
+    run_root_tree_write(
+        payload,
+        path=str(output_path),
+        tree="Events",
+        format="ttree",
+        shared_counters=True,
+    )
+
+    with uproot.open(output_path) as root_file:
+        tree = root_file["Events"]
+        assert tree["nSR"].array(library="np").tolist() == [7, 7, 7]
+        assert tree["SR_pt"].array(library="ak").to_list() == [[1.0, 2.0], [3.0], []]
