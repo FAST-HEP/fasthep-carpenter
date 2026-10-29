@@ -32,6 +32,7 @@ ROOT_TREE_WRITE_SPEC = {
             "allowed": ["zlib", "lz4", "zstd", "none"],
         },
         "compression_level": {"type": "integer", "required": False, "default": 1},
+        "shared_counters": {"type": "boolean", "required": False, "default": False},
         "mode": {
             "type": "string",
             "required": False,
@@ -63,6 +64,7 @@ def run_root_tree_write(
     format: str = "rntuple",
     compression: str = "zlib",
     compression_level: int = 1,
+    shared_counters: bool = False,
     mode: str = "recreate",
     ctx: dict[str, Any] | None = None,
     meta: dict[str, Any] | None = None,
@@ -74,6 +76,9 @@ def run_root_tree_write(
       - target is awkward.Array or dict[str, array-like]
       - fields on the awkward record correspond to output branches
       - keep, when provided, is a flat list of existing field names
+      - shared_counters (TTree only) writes one counter ``n<collection>`` for the jagged
+        branches ``<collection>_<attribute>`` that have the same lengths, as the legacy skims
+        do; by default every jagged branch gets its own counter ``n<branch>``
     """
     if mode != "recreate":
         raise ValueError(
@@ -81,6 +86,8 @@ def run_root_tree_write(
             "Only 'recreate' is currently supported."
         )
     output_format = _normalise_format(format)
+    if shared_counters and output_format != "ttree":
+        raise ValueError("shared_counters requires format 'ttree'")
 
     array = _normalise_target(unwrap_legacy_data_envelope(target))
 
@@ -98,6 +105,8 @@ def run_root_tree_write(
     compression_arg = _resolve_compression(compression, compression_level)
 
     payload = {field: array[field] for field in array.fields}
+    if shared_counters:
+        payload = _group_by_collection(payload)
 
     with uproot.recreate(output_path, compression=compression_arg) as fout:
         if output_format == "rntuple":
@@ -142,6 +151,94 @@ def run_root_tree_write(
     _set_reference_field(result, "partition_id", manifest_record.get("partition_id"))
     _set_reference_field(result, "partition_index", manifest_record["partition"])
     return result
+
+
+def _group_by_collection(payload: dict[str, ak.Array]) -> dict[str, Any]:
+    """Zip the jagged branches ``<collection>_<attribute>`` of equal lengths into one record.
+
+    uproot then writes a single counter ``n<collection>`` and the branches keep their names.
+    The collection is the name up to the last ``_``; a branch that would be alone in its
+    collection joins a shorter collection of the same lengths instead, so an attribute may
+    contain ``_`` (``lepton_pfRelIso04_all`` belongs to ``lepton``). A branch whose lengths
+    differ from its collection keeps its own counter.
+    """
+    members: dict[str, list[tuple[str, str]]] = {}
+    for name, values in payload.items():
+        collection, _, attribute = name.rpartition("_")
+        if collection and attribute and _is_jagged_numeric(values):
+            members.setdefault(collection, []).append((attribute, name))
+
+    for collection, entries in list(members.items()):
+        if len(entries) != 1 or collection not in members:
+            continue
+        attribute, name = entries[0]
+        parent, _, head = collection.rpartition("_")
+        while parent:
+            parent_entries = members.get(parent)
+            if parent_entries and _equal_lengths(
+                payload[name], payload[parent_entries[0][1]]
+            ):
+                parent_entries.append((f"{head}_{attribute}", name))
+                del members[collection]
+                break
+            parent, _, more = parent.rpartition("_")
+            head = f"{more}_{head}"
+
+    # A branch already named like the counter (a compatibility schema can carry the legacy
+    # counter) is replaced by the written counter if it holds the same lengths; otherwise the
+    # collection is not grouped, so the two cannot clash.
+    replaced: set[str] = set()
+    for collection, entries in list(members.items()):
+        counter = f"n{collection}"
+        if counter not in payload:
+            continue
+        if _same_counts(payload[counter], ak.num(payload[entries[0][1]])):
+            replaced.add(counter)
+        else:
+            del members[collection]
+
+    collection_of: dict[str, str] = {}
+    for collection, entries in members.items():
+        reference = payload[entries[0][1]]
+        for _attribute, name in entries:
+            if _equal_lengths(payload[name], reference):
+                collection_of[name] = collection
+
+    grouped: dict[str, Any] = {}
+    for name, values in payload.items():
+        if name in replaced:
+            continue
+        target = collection_of.get(name)
+        if target is None:
+            grouped[name] = values
+        elif target not in grouped:
+            grouped[target] = ak.zip(
+                {
+                    attribute: payload[member]
+                    for attribute, member in members[target]
+                    if collection_of.get(member) == target
+                }
+            )
+    return grouped
+
+
+def _equal_lengths(values: ak.Array, reference: ak.Array) -> bool:
+    return bool(ak.all(ak.num(values) == ak.num(reference)))
+
+
+def _same_counts(values: ak.Array, counts: ak.Array) -> bool:
+    if not isinstance(ak.type(values).content, ak.types.NumpyType):
+        return False
+    return bool(ak.all(values == counts))
+
+
+def _is_jagged_numeric(values: ak.Array) -> bool:
+    layout_type = ak.type(values).content
+    return (
+        isinstance(layout_type, ak.types.ListType)
+        and layout_type.parameter("__array__") is None
+        and isinstance(layout_type.content, ak.types.NumpyType)
+    )
 
 
 def _manifest_record(

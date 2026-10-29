@@ -10,6 +10,12 @@ Add new entries under `## [Unreleased]`, in the category they belong to. At rele
 
 ## [Unreleased]
 
+### Added
+
+- The `root_tree` writer accepts `shared_counters: true` (TTree only). The jagged branches
+  `<collection>_<attribute>` with the same lengths then share one counter `n<collection>`, as the
+  legacy skims do, instead of every branch getting its own `n<branch>`.
+
 ### Fixed
 
 - Cutflow merging across three or more datasets no longer collapses most datasets into a single
