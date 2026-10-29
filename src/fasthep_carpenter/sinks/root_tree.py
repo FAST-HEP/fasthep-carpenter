@@ -32,6 +32,7 @@ ROOT_TREE_WRITE_SPEC = {
             "allowed": ["zlib", "lz4", "zstd", "none"],
         },
         "compression_level": {"type": "integer", "required": False, "default": 1},
+        "shared_counters": {"type": "boolean", "required": False, "default": False},
         "mode": {
             "type": "string",
             "required": False,
@@ -63,6 +64,7 @@ def run_root_tree_write(
     format: str = "rntuple",
     compression: str = "zlib",
     compression_level: int = 1,
+    shared_counters: bool = False,
     mode: str = "recreate",
     ctx: dict[str, Any] | None = None,
     meta: dict[str, Any] | None = None,
@@ -74,6 +76,9 @@ def run_root_tree_write(
       - target is awkward.Array or dict[str, array-like]
       - fields on the awkward record correspond to output branches
       - keep, when provided, is a flat list of existing field names
+      - shared_counters (TTree only) writes one counter ``n<collection>`` for the jagged
+        branches ``<collection>_<attribute>`` that have the same lengths, as the legacy skims
+        do; by default every jagged branch gets its own counter ``n<branch>``
     """
     if mode != "recreate":
         raise ValueError(
@@ -81,6 +86,8 @@ def run_root_tree_write(
             "Only 'recreate' is currently supported."
         )
     output_format = _normalise_format(format)
+    if shared_counters and output_format != "ttree":
+        raise ValueError("shared_counters requires format 'ttree'")
 
     array = _normalise_target(unwrap_legacy_data_envelope(target))
 
@@ -98,6 +105,8 @@ def run_root_tree_write(
     compression_arg = _resolve_compression(compression, compression_level)
 
     payload = {field: array[field] for field in array.fields}
+    if shared_counters:
+        payload = _group_by_collection(payload)
 
     with uproot.recreate(output_path, compression=compression_arg) as fout:
         if output_format == "rntuple":
@@ -142,6 +151,49 @@ def run_root_tree_write(
     _set_reference_field(result, "partition_id", manifest_record.get("partition_id"))
     _set_reference_field(result, "partition_index", manifest_record["partition"])
     return result
+
+
+def _group_by_collection(payload: dict[str, ak.Array]) -> dict[str, Any]:
+    """Zip the jagged branches ``<collection>_<attribute>`` of equal lengths into one record.
+
+    uproot then writes a single counter ``n<collection>`` and the branches keep their names.
+    A branch whose lengths differ from the first branch of its collection keeps its own counter.
+    """
+    members: dict[str, list[tuple[str, ak.Array]]] = {}
+    for name, values in payload.items():
+        collection, _, attribute = name.rpartition("_")
+        if collection and attribute and _is_jagged_numeric(values):
+            members.setdefault(collection, []).append((attribute, values))
+
+    grouped: dict[str, Any] = {}
+    placed: set[str] = set()
+    for name, values in payload.items():
+        if name in placed:
+            continue
+        collection, _, attribute = name.rpartition("_")
+        group = members.get(collection) if collection and attribute else None
+        if not group or not _is_jagged_numeric(values):
+            grouped[name] = values
+            continue
+        reference = ak.num(group[0][1])
+        fields = {
+            attr: arr for attr, arr in group if ak.all(ak.num(arr) == reference)
+        }
+        if name.rpartition("_")[2] not in fields:
+            grouped[name] = values
+            continue
+        grouped[collection] = ak.zip(fields)
+        placed.update(f"{collection}_{attr}" for attr in fields)
+    return grouped
+
+
+def _is_jagged_numeric(values: ak.Array) -> bool:
+    layout_type = ak.type(values).content
+    return (
+        isinstance(layout_type, ak.types.ListType)
+        and layout_type.parameter("__array__") is None
+        and isinstance(layout_type.content, ak.types.NumpyType)
+    )
 
 
 def _manifest_record(
