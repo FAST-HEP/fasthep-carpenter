@@ -148,7 +148,15 @@ def test_shared_counters_write_one_counter_per_collection(tmp_path: Path) -> Non
     with uproot.open(output_path) as root_file:
         tree = root_file["Events"]
         keys = set(tree.keys())
-        assert {"event", "nSR", "SR_pt", "SR_eta", "SR_selection", "nJet", "Jet_pt"} == keys
+        assert {
+            "event",
+            "nSR",
+            "SR_pt",
+            "SR_eta",
+            "SR_selection",
+            "nJet",
+            "Jet_pt",
+        } == keys
         assert tree["nSR"].array(library="np").dtype == np.dtype("int32")
         assert tree["nSR"].array(library="np").tolist() == [2, 1, 0]
         assert tree["nJet"].array(library="np").tolist() == [1, 0, 2]
@@ -158,7 +166,11 @@ def test_shared_counters_write_one_counter_per_collection(tmp_path: Path) -> Non
             [True],
             [],
         ]
-        assert tree["Jet_pt"].array(library="ak").to_list() == [[10.0], [], [20.0, 30.0]]
+        assert tree["Jet_pt"].array(library="ak").to_list() == [
+            [10.0],
+            [],
+            [20.0, 30.0],
+        ]
     assert result.metadata["branches"] == [
         "event",
         "SR_pt",
@@ -243,9 +255,15 @@ def test_shared_counters_reuse_an_existing_counter_branch_of_the_same_lengths(
 
     with uproot.open(output_path) as root_file:
         tree = root_file["Events"]
-        assert {"event", "nSR", "SR_pt", "SR_eta", "SR_selection", "nJet", "Jet_pt"} == set(
-            tree.keys()
-        )
+        assert {
+            "event",
+            "nSR",
+            "SR_pt",
+            "SR_eta",
+            "SR_selection",
+            "nJet",
+            "Jet_pt",
+        } == set(tree.keys())
         assert tree["nSR"].array(library="np").tolist() == [2, 1, 0]
 
 
@@ -269,3 +287,37 @@ def test_shared_counters_keep_an_existing_branch_that_is_not_the_counter(
         tree = root_file["Events"]
         assert tree["nSR"].array(library="np").tolist() == [7, 7, 7]
         assert tree["SR_pt"].array(library="ak").to_list() == [[1.0, 2.0], [3.0], []]
+
+
+def test_shared_counters_keep_attributes_with_underscores_in_their_collection(
+    tmp_path: Path,
+) -> None:
+    # Legacy writes lepton_pfRelIso04_all under the lepton counter, not under its own.
+    payload = ak.Array(
+        {
+            "WFinder_lepton_pt": [[1.0], [], [2.0]],
+            "WFinder_lepton_pfRelIso04_all": [[0.1], [], [0.2]],
+        }
+    )
+    output_path = tmp_path / "underscore_attribute.root"
+
+    run_root_tree_write(
+        payload,
+        path=str(output_path),
+        tree="Events",
+        format="ttree",
+        shared_counters=True,
+    )
+
+    with uproot.open(output_path) as root_file:
+        tree = root_file["Events"]
+        assert set(tree.keys()) == {
+            "nWFinder_lepton",
+            "WFinder_lepton_pt",
+            "WFinder_lepton_pfRelIso04_all",
+        }
+        assert tree["WFinder_lepton_pfRelIso04_all"].array(library="ak").to_list() == [
+            [0.1],
+            [],
+            [0.2],
+        ]

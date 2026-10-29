@@ -157,13 +157,32 @@ def _group_by_collection(payload: dict[str, ak.Array]) -> dict[str, Any]:
     """Zip the jagged branches ``<collection>_<attribute>`` of equal lengths into one record.
 
     uproot then writes a single counter ``n<collection>`` and the branches keep their names.
-    A branch whose lengths differ from the first branch of its collection keeps its own counter.
+    The collection is the name up to the last ``_``; a branch that would be alone in its
+    collection joins a shorter collection of the same lengths instead, so an attribute may
+    contain ``_`` (``lepton_pfRelIso04_all`` belongs to ``lepton``). A branch whose lengths
+    differ from its collection keeps its own counter.
     """
-    members: dict[str, list[tuple[str, ak.Array]]] = {}
+    members: dict[str, list[tuple[str, str]]] = {}
     for name, values in payload.items():
         collection, _, attribute = name.rpartition("_")
         if collection and attribute and _is_jagged_numeric(values):
-            members.setdefault(collection, []).append((attribute, values))
+            members.setdefault(collection, []).append((attribute, name))
+
+    for collection, entries in list(members.items()):
+        if len(entries) != 1 or collection not in members:
+            continue
+        attribute, name = entries[0]
+        parent, _, head = collection.rpartition("_")
+        while parent:
+            parent_entries = members.get(parent)
+            if parent_entries and _equal_lengths(
+                payload[name], payload[parent_entries[0][1]]
+            ):
+                parent_entries.append((f"{head}_{attribute}", name))
+                del members[collection]
+                break
+            parent, _, more = parent.rpartition("_")
+            head = f"{more}_{head}"
 
     # A branch already named like the counter (a compatibility schema can carry the legacy
     # counter) is replaced by the written counter if it holds the same lengths; otherwise the
@@ -173,31 +192,38 @@ def _group_by_collection(payload: dict[str, ak.Array]) -> dict[str, Any]:
         counter = f"n{collection}"
         if counter not in payload:
             continue
-        if _same_counts(payload[counter], ak.num(entries[0][1])):
+        if _same_counts(payload[counter], ak.num(payload[entries[0][1]])):
             replaced.add(counter)
         else:
             del members[collection]
 
+    collection_of: dict[str, str] = {}
+    for collection, entries in members.items():
+        reference = payload[entries[0][1]]
+        for _attribute, name in entries:
+            if _equal_lengths(payload[name], reference):
+                collection_of[name] = collection
+
     grouped: dict[str, Any] = {}
-    placed: set[str] = set(replaced)
     for name, values in payload.items():
-        if name in placed:
+        if name in replaced:
             continue
-        collection, _, attribute = name.rpartition("_")
-        group = members.get(collection) if collection and attribute else None
-        if not group or not _is_jagged_numeric(values):
+        target = collection_of.get(name)
+        if target is None:
             grouped[name] = values
-            continue
-        reference = ak.num(group[0][1])
-        fields = {
-            attr: arr for attr, arr in group if ak.all(ak.num(arr) == reference)
-        }
-        if attribute not in fields:
-            grouped[name] = values
-            continue
-        grouped[collection] = ak.zip(fields)
-        placed.update(f"{collection}_{attr}" for attr in fields)
+        elif target not in grouped:
+            grouped[target] = ak.zip(
+                {
+                    attribute: payload[member]
+                    for attribute, member in members[target]
+                    if collection_of.get(member) == target
+                }
+            )
     return grouped
+
+
+def _equal_lengths(values: ak.Array, reference: ak.Array) -> bool:
+    return bool(ak.all(ak.num(values) == ak.num(reference)))
 
 
 def _same_counts(values: ak.Array, counts: ak.Array) -> bool:
