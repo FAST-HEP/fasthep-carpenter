@@ -126,7 +126,13 @@ use environment-qualified runs for Python-version, GPU or docs-specific work.
 
 ## Documentation and Changelog
 
-User-facing changes — new features, behavior changes, bug fixes, breaking changes — must add an
-entry to `CHANGELOG.md` under `## [Unreleased]`, in the matching [Keep a
-Changelog](https://keepachangelog.com/en/1.1.0/) category (Added, Changed, Deprecated, Removed,
-Fixed, Security). This repository has no `docs/` yet.
+Do not edit `CHANGELOG.md` by hand. Release sections are generated from commit messages
+(`git-cliff`) when a release is prepared, and `## [Unreleased]` stays empty. The commit subject is
+the changelog bullet, so write it for a user of the package: `<type>(<scope>): <description>`, for
+example `fix(compiler): chunk each file by its own event count`. `feat` is listed under Added, `fix`
+under Fixed, `refactor` and `perf` under Changed; `docs`, `chore`, `ci`, `build`, `test` and `style`
+stay out. A trailer `Changelog: deprecated`, `removed`, `security` or `skip` overrides the category.
+The full rules are in `docs/commit-convention.md` of
+[FAST-HEP/.github](https://github.com/FAST-HEP/.github); the `commit-msg` hook in
+`.pre-commit-config.yaml` checks them (`pre-commit install` installs it) and CI checks every commit
+of a pull request.
