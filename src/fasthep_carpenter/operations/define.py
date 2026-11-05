@@ -6,14 +6,7 @@ import awkward as ak
 import numpy as np
 from hepflow.compiler.expr_symbols import data_symbols_in_expr
 from hepflow.model.data_flow import DataDependencyResult
-from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 from hepflow.runtime.engine import eval_expr
-
-from fasthep_carpenter.runtime.compat import (
-    legacy_data_envelope,
-    unwrap_legacy_data_envelope,
-)
-from fasthep_carpenter.runtime.stream_readers import get_stream_array
 
 DEFINE_SPEC = {
     "name": "hep.define",
@@ -91,11 +84,8 @@ def parse_define_column_dependencies(
 
 
 def run_define(
-    data: dict[str, Any], params: dict[str, Any], ctx: dict[str, Any]
-) -> dict[str, Any]:
-    events = get_stream_array(
-        data, ctx.get("primary_stream", DEFAULT_PRIMARY_STREAM_ID)
-    )
+    events: ak.Array, params: dict[str, Any], ctx: dict[str, Any]
+) -> ak.Array:
     out = events
 
     for v in params.get("variables", []):
@@ -129,26 +119,19 @@ def run_define(
 
         raise ValueError(f"Unknown variable spec: {v}")
 
-    return {DEFAULT_PRIMARY_STREAM_ID: out}
+    return out
 
 
 def run_define_transform(
     *, stream: Any, variables: list[dict[str, Any]], ctx: Any = None, **kwargs: Any
 ) -> ak.Array:
-    stream = unwrap_legacy_data_envelope(stream)
-    legacy_data = legacy_data_envelope(stream)
     legacy_params = {
         "variables": variables,
         **kwargs,
     }
     legacy_ctx = dict(ctx or {})
 
-    out = run_define(
-        data=legacy_data,
-        params=legacy_params,
-        ctx=legacy_ctx,
-    )
-    return get_stream_array(out, DEFAULT_PRIMARY_STREAM_ID)
+    return run_define(stream, legacy_params, legacy_ctx)
 
 
 def _with_defined_field(

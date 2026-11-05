@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from typing import Any
 
+import awkward as ak
 from hepflow.compiler.expr_symbols import data_symbols_in_expr
 from hepflow.model.data_flow import DataDependencyResult
-from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 from hepflow.registry.defaults import default_expr_registry
 from hepflow.runtime.engine import eval_expr
 
@@ -12,11 +12,6 @@ from fasthep_carpenter.operations._selection import (
     _required_output,
     materialize_selection_flag,
 )
-from fasthep_carpenter.runtime.compat import (
-    legacy_data_envelope,
-    unwrap_legacy_data_envelope,
-)
-from fasthep_carpenter.runtime.stream_readers import get_stream_array
 
 SELECTION_FLAG_SPEC = {
     "name": "hep.selection.flag",
@@ -47,19 +42,10 @@ SELECTION_FLAG_SPEC = {
 
 
 def run_selection_flag(
-    data: dict[str, Any],
+    events: ak.Array,
     params: dict[str, Any],
     ctx: dict[str, Any],
-) -> dict[str, Any]:
-    stream_id = str(
-        params.get("stream_id")
-        or ctx.get("primary_stream")
-        or DEFAULT_PRIMARY_STREAM_ID
-    )
-    events = get_stream_array(
-        data,
-        stream_id,
-    )
+) -> ak.Array:
     output = _required_output(params.get("output"))
     selection = _selection_expressions(params.get("selection"))
 
@@ -83,14 +69,12 @@ def run_selection_flag(
             "hep.selection.flag selection must contain at least one expression"
         )
 
-    return {
-        DEFAULT_PRIMARY_STREAM_ID: materialize_selection_flag(
-            events,
-            flag,
-            output,
-            op_name="hep.selection.flag",
-        )
-    }
+    return materialize_selection_flag(
+        events,
+        flag,
+        output,
+        op_name="hep.selection.flag",
+    )
 
 
 def run_selection_flag_transform(
@@ -102,13 +86,12 @@ def run_selection_flag_transform(
     **kwargs: Any,
 ) -> Any:
     del kwargs
-    stream = unwrap_legacy_data_envelope(stream)
     params = {
         "selection": selection,
         "output": output,
     }
     out = run_selection_flag(
-        data=legacy_data_envelope(stream),
+        events=stream,
         params=params,
         ctx=dict(ctx or {}),
     )
@@ -119,7 +102,7 @@ def run_selection_flag_transform(
             inputs={"symbols": sorted(deps.consumes)},
             outputs={"symbols": [resolved_output]},
         )
-    return get_stream_array(out, DEFAULT_PRIMARY_STREAM_ID)
+    return out
 
 
 def _selection_expressions(value: Any) -> list[str]:

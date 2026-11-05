@@ -24,14 +24,7 @@ from hepflow.compiler.data_flow import (
     DependencyContext,
     parse_component_data_dependencies,
 )
-from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 from hepflow.registry.defaults import default_expr_registry
-
-from fasthep_carpenter.runtime.compat import (
-    legacy_data_envelope,
-    unwrap_legacy_data_envelope,
-)
-from fasthep_carpenter.runtime.stream_readers import get_stream_array
 
 vector.register_awkward()
 
@@ -140,15 +133,10 @@ def clean_removed_count_name(params: dict[str, Any]) -> str | None:
 
 
 def run_clean(
-    data: dict[str, Any], params: dict[str, Any], ctx: dict[str, Any]
-) -> dict[str, Any]:
-    stream_name = (
-        params.get("stream")
-        or params.get("stream_id")
-        or ctx.get("primary_stream")
-        or DEFAULT_PRIMARY_STREAM_ID
-    )
-    events = _normalise_stream(get_stream_array(data, str(stream_name)))
+    events: ak.Array, params: dict[str, Any], ctx: dict[str, Any]
+) -> ak.Array:
+    del ctx
+    events = _normalise_stream(events)
 
     source_name = _required_collection_name(params.get("source"), param="source")
     target_names = _target_collection_names(params.get("clean_against"))
@@ -220,7 +208,7 @@ def run_clean(
     if _keep_removed(params):
         out = _write_collection(out, f"{output_name}_removed", removed, source.style)
 
-    return {DEFAULT_PRIMARY_STREAM_ID: out}
+    return out
 
 
 def run_clean_transform(
@@ -240,7 +228,6 @@ def run_clean_transform(
     **kwargs: Any,
 ) -> Any:
     del kwargs
-    stream = unwrap_legacy_data_envelope(stream)
     legacy_params: dict[str, Any] = {
         "source": source,
         "clean_against": clean_against,
@@ -260,7 +247,7 @@ def run_clean_transform(
     legacy_params.setdefault("output", clean_output_name(legacy_params))
 
     out = run_clean(
-        data=legacy_data_envelope(stream),
+        events=stream,
         params=legacy_params,
         ctx=dict(ctx or {}),
     )
@@ -270,7 +257,7 @@ def run_clean_transform(
             inputs={"symbols": sorted(deps.consumes)},
             outputs={"symbols": sorted(deps.produces)},
         )
-    return get_stream_array(out, DEFAULT_PRIMARY_STREAM_ID)
+    return out
 
 
 class _Collection:

@@ -19,14 +19,18 @@ from fasthep_carpenter.operations.build_recoil import (
     run_build_recoil,
     run_build_recoil_transform,
 )
+from fasthep_carpenter.operations.choose import run_choose
+from fasthep_carpenter.operations.clean import run_clean
 from fasthep_carpenter.operations.cms.match_l1t_jets import (
     run_match_l1t_jets,
     run_match_l1t_jets_transform,
 )
+from fasthep_carpenter.operations.define import run_define
 from fasthep_carpenter.operations.di_object_mass import (
     run_di_object_mass,
     run_di_object_mass_transform,
 )
+from fasthep_carpenter.operations.selection_flag import run_selection_flag
 
 # --- builders -------------------------------------------------------------------------
 
@@ -200,3 +204,57 @@ def test_match_l1t_jets_transform_returns_plain_stream() -> None:
 
     assert isinstance(out, ak.Array)
     assert "n_matched" in out.fields
+
+# --- selection and definition ---------------------------------------------------------
+
+
+def test_selection_flag_accepts_and_returns_plain_stream() -> None:
+    out = run_selection_flag(
+        ak.Array({"pt": [10.0, 3.0]}),
+        {"selection": ["pt > 5"], "output": "pass_pt"},
+        {},
+    )
+
+    assert isinstance(out, ak.Array)
+    assert ak.to_list(out["pass_pt"]) == [True, False]
+
+
+def test_clean_accepts_and_returns_plain_stream() -> None:
+    events = ak.Array(
+        {
+            "src_eta": [[0.0, 2.0]],
+            "src_phi": [[0.0, 2.0]],
+            "src_pt": [[10.0, 20.0]],
+            "tgt_eta": [[0.1]],
+            "tgt_phi": [[0.0]],
+        }
+    )
+
+    out = run_clean(events, {"source": "src", "clean_against": ["tgt"]}, {})
+
+    assert isinstance(out, ak.Array)
+    assert ak.to_list(out["ncleaned_src"]) == [1]
+
+
+def test_choose_accepts_and_returns_plain_stream() -> None:
+    params = {
+        "cases": [{"when": "x > 0", "values": {"y": "1.0"}}],
+        "default": {"y": "0.0"},
+        "on_no_match": "default",
+    }
+
+    out = run_choose(ak.Array({"x": [1.0, -1.0]}), params, {})
+
+    assert isinstance(out, ak.Array)
+    assert ak.to_list(out["y"]) == [1.0, 0.0]
+
+
+def test_define_accepts_and_returns_plain_stream() -> None:
+    out = run_define(
+        ak.Array({"event": [1, 2]}),
+        {"variables": [{"name": "one", "expr": "1"}]},
+        {},
+    )
+
+    assert isinstance(out, ak.Array)
+    assert ak.to_list(out["one"]) == [1, 1]

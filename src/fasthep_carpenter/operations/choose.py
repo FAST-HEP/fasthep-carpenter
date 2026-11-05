@@ -6,7 +6,6 @@ import awkward as ak
 import numpy as np
 from hepflow.compiler.expr_symbols import data_symbols_in_expr
 from hepflow.model.data_flow import DataDependencyResult
-from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 from hepflow.registry.defaults import default_expr_registry
 from hepflow.runtime.engine import eval_expr
 
@@ -14,11 +13,6 @@ from fasthep_carpenter.operations._validation import (
     validate_event_mask,
     validate_event_value,
 )
-from fasthep_carpenter.runtime.compat import (
-    legacy_data_envelope,
-    unwrap_legacy_data_envelope,
-)
-from fasthep_carpenter.runtime.stream_readers import get_stream_array
 
 CHOOSE_SPEC = {
     "name": "hep.choose",
@@ -100,7 +94,6 @@ def run_choose_transform(
     **kwargs: Any,
 ) -> Any:
     del kwargs
-    stream = unwrap_legacy_data_envelope(stream)
     params: dict[str, Any] = {
         "cases": cases,
         "on_multiple": on_multiple,
@@ -109,7 +102,7 @@ def run_choose_transform(
     if default is not None:
         params["default"] = default
     out = run_choose(
-        data=legacy_data_envelope(stream),
+        events=stream,
         params=params,
         ctx=dict(ctx or {}),
     )
@@ -119,18 +112,14 @@ def run_choose_transform(
             inputs={"symbols": sorted(deps.consumes)},
             outputs={"symbols": sorted(deps.produces)},
         )
-    return get_stream_array(out, DEFAULT_PRIMARY_STREAM_ID)
+    return out
 
 
 def run_choose(
-    data: dict[str, Any],
+    events: ak.Array,
     params: dict[str, Any],
     ctx: dict[str, Any],
-) -> dict[str, Any]:
-    events = get_stream_array(
-        data,
-        ctx.get("primary_stream", DEFAULT_PRIMARY_STREAM_ID),
-    )
+) -> ak.Array:
     n_events = len(events)
     cases = _case_specs(params.get("cases"))
     on_multiple = _policy(
@@ -195,7 +184,7 @@ def run_choose(
     out = events
     for name in output_names:
         out = ak.with_field(out, chosen[name], name)
-    return {DEFAULT_PRIMARY_STREAM_ID: out}
+    return out
 
 
 def _case_specs(value: Any) -> list[dict[str, Any]]:
