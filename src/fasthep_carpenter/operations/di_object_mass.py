@@ -6,13 +6,7 @@ import awkward as ak
 import numpy as np
 from hepflow.compiler.expr_symbols import data_symbols_in_expr
 from hepflow.model.data_flow import DataDependencyResult
-from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 from hepflow.runtime.engine import eval_expr
-
-from fasthep_carpenter.runtime.compat import (
-    legacy_data_envelope,
-    unwrap_legacy_data_envelope,
-)
 
 DI_OBJECT_MASS_SPEC = {
     "name": "hep.di_object_mass",
@@ -119,18 +113,14 @@ def _two_object_mass(px, py, pz, E) -> Any:
 
 
 def run_di_object_mass(
-    data: dict[str, Any], params: dict[str, Any], ctx: dict[str, Any]
-) -> dict[str, Any]:
+    events: ak.Array, params: dict[str, Any], ctx: dict[str, Any]
+) -> ak.Array:
     """
     params:
       collection: Muon|Electron|Jet|Photon (default Muon)
       mask: column name or expression producing boolean jagged mask
       out_var: optional explicit output column name
     """
-    events = data.get(
-        ctx["primary_stream"],
-        data.get(DEFAULT_PRIMARY_STREAM_ID, next(iter(data.values()))),
-    )
     collection = params.get("collection") or "Muon"
     mask_expr = params.get("mask")
     out_name = di_object_mass_output_name(params)
@@ -153,14 +143,12 @@ def run_di_object_mass(
         E = E[mask]
 
     m = _two_object_mass(px, py, pz, E)
-    out = ak.with_field(events, m, out_name)
-    return {DEFAULT_PRIMARY_STREAM_ID: out}
+    return ak.with_field(events, m, out_name)
 
 
 def run_di_object_mass_transform(
     *, stream, collection="Muon", mask=None, out_var=None, ctx=None, **kwargs
 ):
-    stream = unwrap_legacy_data_envelope(stream)
     legacy_params = {
         "collection": collection,
     }
@@ -169,14 +157,8 @@ def run_di_object_mass_transform(
     if out_var is not None:
         legacy_params["out_var"] = out_var
 
-    legacy_ctx = ctx or {}
-    if "primary_stream" not in legacy_ctx:
-        legacy_ctx["primary_stream"] = DEFAULT_PRIMARY_STREAM_ID
-
-    out = run_di_object_mass(
-        data=legacy_data_envelope(stream),
-        params=legacy_params,
-        ctx=legacy_ctx,
-        **kwargs,
+    return run_di_object_mass(
+        stream,
+        legacy_params,
+        dict(ctx or {}),
     )
-    return legacy_data_envelope(out.get(DEFAULT_PRIMARY_STREAM_ID, out))
