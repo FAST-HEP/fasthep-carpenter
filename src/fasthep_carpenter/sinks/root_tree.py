@@ -8,8 +8,6 @@ import awkward as ak
 import uproot
 from hepflow.model.io import OutputResult
 
-from fasthep_carpenter.runtime.compat import unwrap_legacy_data_envelope
-
 ROOT_TREE_WRITE_SPEC = {
     "name": "root_tree",
     "kind": "writer",
@@ -89,7 +87,7 @@ def run_root_tree_write(
     if shared_counters and output_format != "ttree":
         raise ValueError("shared_counters requires format 'ttree'")
 
-    array = _normalise_target(unwrap_legacy_data_envelope(target))
+    array = _normalise_target(target)
 
     if keep is not None:
         missing = [field for field in keep if field not in array.fields]
