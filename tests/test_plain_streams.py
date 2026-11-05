@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Any
 
 import awkward as ak
@@ -31,6 +32,14 @@ from fasthep_carpenter.operations.di_object_mass import (
     run_di_object_mass_transform,
 )
 from fasthep_carpenter.operations.selection_flag import run_selection_flag
+from fasthep_carpenter.operations.weights.lookup_csv import (
+    run_lookup_csv,
+    run_lookup_csv_transform,
+)
+from fasthep_carpenter.operations.weights.pdf_envelope import (
+    run_pdf_envelope,
+    run_pdf_envelope_transform,
+)
 
 # --- builders -------------------------------------------------------------------------
 
@@ -258,3 +267,57 @@ def test_define_accepts_and_returns_plain_stream() -> None:
 
     assert isinstance(out, ak.Array)
     assert ak.to_list(out["one"]) == [1, 1]
+
+# --- weights ----------------------------------------------------------------------------
+
+
+def _pdf_events() -> ak.Array:
+    return ak.Array({"LHEPdfWeight": [[1.0, 1.04, 0.98], [1.0, 1.07, 0.91]]})
+
+
+_PDF: dict[str, Any] = {"inputs": "LHEPdfWeight", "outputs": {"up": "pdf_up", "down": "pdf_down"}}
+
+
+def test_pdf_envelope_accepts_and_returns_plain_stream() -> None:
+    out = run_pdf_envelope(_pdf_events(), dict(_PDF), {})
+
+    assert isinstance(out, ak.Array)
+    assert ak.to_list(out.pdf_up) == [1.04, 1.07]
+
+
+def test_pdf_envelope_transform_returns_plain_stream() -> None:
+    out = run_pdf_envelope_transform(stream=_pdf_events(), **_PDF)
+
+    assert isinstance(out, ak.Array)
+    assert ak.to_list(out.pdf_down) == [0.98, 0.91]
+
+
+def _lookup_params(tmp_path: Path) -> dict[str, Any]:
+    csv_path = tmp_path / "eff.csv"
+    csv_path.write_text(
+        "pt_min,pt_max,eff\n0,25,0.9\n25,100,0.8\n",
+        encoding="utf-8",
+    )
+    return {
+        "path": str(csv_path),
+        "variable": "Muon_Pt",
+        "bins": {"column": "pt"},
+        "values": {"nominal": "eff"},
+        "outputs": {"nominal": "EffWeight"},
+    }
+
+
+def test_lookup_csv_accepts_and_returns_plain_stream(tmp_path: Path) -> None:
+    out = run_lookup_csv(ak.Array({"Muon_Pt": [12.0, 30.0]}), _lookup_params(tmp_path), {})
+
+    assert isinstance(out, ak.Array)
+    assert ak.to_list(out.EffWeight) == [0.9, 0.8]
+
+
+def test_lookup_csv_transform_returns_plain_stream(tmp_path: Path) -> None:
+    out = run_lookup_csv_transform(
+        stream=ak.Array({"Muon_Pt": [12.0, 30.0]}), **_lookup_params(tmp_path)
+    )
+
+    assert isinstance(out, ak.Array)
+    assert ak.to_list(out.EffWeight) == [0.9, 0.8]

@@ -4,13 +4,6 @@ from typing import Any
 
 import awkward as ak
 from hepflow.model.data_flow import DataDependencyResult
-from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
-
-from fasthep_carpenter.runtime.compat import (
-    legacy_data_envelope,
-    unwrap_legacy_data_envelope,
-)
-from fasthep_carpenter.runtime.stream_readers import get_stream_array
 
 PDF_ENVELOPE_SPEC = {
     "name": "hep.weights.pdf_envelope",
@@ -57,17 +50,14 @@ def parse_pdf_envelope_dependencies(
 
 
 def run_pdf_envelope(
-    data: dict[str, Any], params: dict[str, Any], ctx: dict[str, Any]
-) -> dict[str, Any]:
-    events = get_stream_array(
-        data, ctx.get("primary_stream", DEFAULT_PRIMARY_STREAM_ID)
-    )
-    out = apply_pdf_envelope(
+    events: ak.Array, params: dict[str, Any], ctx: dict[str, Any]
+) -> ak.Array:
+    del ctx
+    return apply_pdf_envelope(
         events,
         inputs=params["inputs"],
         outputs=dict(params["outputs"]),
     )
-    return {DEFAULT_PRIMARY_STREAM_ID: out}
 
 
 def run_pdf_envelope_transform(
@@ -77,16 +67,12 @@ def run_pdf_envelope_transform(
     outputs: dict[str, str],
     ctx: dict[str, Any] | None = None,
     **kwargs: Any,
-) -> dict[str, ak.Array]:
-    stream = unwrap_legacy_data_envelope(stream)
-    legacy_data = legacy_data_envelope(stream)
-    out = run_pdf_envelope(
-        data=legacy_data,
-        params={"inputs": inputs, "outputs": outputs},
-        ctx=dict(ctx or {}),
-        **kwargs,
+) -> ak.Array:
+    return run_pdf_envelope(
+        stream,
+        {"inputs": inputs, "outputs": outputs},
+        dict(ctx or {}),
     )
-    return {"events": get_stream_array(out, DEFAULT_PRIMARY_STREAM_ID)}
 
 
 def apply_pdf_envelope(
