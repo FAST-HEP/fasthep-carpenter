@@ -29,7 +29,6 @@ SELECT_OBJECTS_SPEC = {
         "derived": {"type": "mapping", "required": False},
         "sort": {"type": "mapping", "required": False, "default": DEFAULT_SORT},
         "missing_fields": {"type": "string", "required": False, "default": "error"},
-        "legacy": {"type": "mapping", "required": False},
     },
     "normalize_params": {"defaults": True},
     "result": {

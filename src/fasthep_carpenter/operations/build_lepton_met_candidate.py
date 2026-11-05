@@ -30,7 +30,6 @@ BUILD_LEPTON_MET_CANDIDATE_SPEC = {
         "output": {"type": "string", "required": True},
         "selection": {"type": "mapping", "required": False},
         "keep": {"type": "mapping", "required": True},
-        "legacy": {"type": "mapping", "required": False},
     },
     "result": {
         "kind": "event_stream",

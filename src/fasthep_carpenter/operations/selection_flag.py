@@ -21,7 +21,6 @@ SELECTION_FLAG_SPEC = {
     "params": {
         "selection": {"type": "list[string]", "required": True},
         "output": {"type": "string", "required": False},
-        "legacy": {"type": "mapping", "required": False},
     },
     "normalize_params": {"stage_id_defaults": {"output": "id"}},
     "result": {

@@ -30,7 +30,6 @@ BUILD_PAIRS_SPEC = {
         "selection": {"type": "mapping", "required": False},
         "sort": {"type": "mapping", "required": False},
         "keep": {"type": "mapping", "required": True},
-        "legacy": {"type": "mapping", "required": False},
     },
     "result": {
         "kind": "event_stream",
