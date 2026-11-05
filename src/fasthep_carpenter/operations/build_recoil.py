@@ -34,7 +34,6 @@ BUILD_RECOIL_SPEC = {
         "selection": {"type": "list[string]", "required": False, "default": []},
         "keep": {"type": "list[string]", "required": True},
         "reduce": {"type": "mapping", "required": False},
-        "legacy": {"type": "mapping", "required": False},
     },
     "result": {
         "kind": "event_stream",
