@@ -321,3 +321,15 @@ def test_shared_counters_keep_attributes_with_underscores_in_their_collection(
             [],
             [0.2],
         ]
+
+
+def test_single_key_dict_target_is_a_record_not_an_envelope(tmp_path: Path) -> None:
+    result = run_root_tree_write(
+        {"events": ak.Array([1, 2, 3])},
+        path=str(tmp_path / "record.root"),
+        format="ttree",
+    )
+
+    assert result.metadata["branches"] == ["events"]
+    with uproot.open(tmp_path / "record.root") as root_file:
+        assert root_file["events"]["events"].array().tolist() == [1, 2, 3]

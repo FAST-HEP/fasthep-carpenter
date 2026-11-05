@@ -8,7 +8,6 @@ from hepflow.compiler.data_flow import (
     DependencyContext,
     parse_component_data_dependencies,
 )
-from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 
 from fasthep_carpenter.expr_helpers import leading
 from fasthep_carpenter.operations.choose import (
@@ -550,16 +549,14 @@ def _run_choose(
     *,
     ctx: dict[str, Any] | None = None,
 ) -> ak.Array:
-    out = run_choose(
-        data={DEFAULT_PRIMARY_STREAM_ID: events},
-        params=params,
-        ctx={
-            "primary_stream": DEFAULT_PRIMARY_STREAM_ID,
+    return run_choose(
+        events,
+        params,
+        {
             "leading": leading,
             **dict(ctx or {}),
         },
     )
-    return out[DEFAULT_PRIMARY_STREAM_ID]
 
 
 class _Provenance:

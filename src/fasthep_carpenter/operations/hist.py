@@ -6,14 +6,7 @@ import awkward as ak
 import hist
 from hepflow.compiler.expr_symbols import data_symbols_in_expr
 from hepflow.model.data_flow import DataDependencyResult
-from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 from hepflow.runtime.engine import eval_expr
-
-from fasthep_carpenter.runtime.compat import (
-    legacy_data_envelope,
-    unwrap_legacy_data_envelope,
-)
-from fasthep_carpenter.runtime.stream_readers import get_stream_array
 
 HIST_SPEC = {
     "name": "hep.hist",
@@ -143,11 +136,8 @@ def _make_hist(axes: list[dict[str, Any]], storage: str) -> hist.Hist:
 
 
 def run_make_hist(
-    data: dict[str, Any], params: dict[str, Any], ctx: dict[str, Any]
-) -> dict[str, Any]:
-    events = get_stream_array(
-        data, ctx.get("primary_stream", DEFAULT_PRIMARY_STREAM_ID)
-    )
+    events: ak.Array, params: dict[str, Any], ctx: dict[str, Any]
+) -> hist.Hist:
     axes = params["axes"]
     storage = params.get("storage", "count")
     weight_expr = params.get("weight_expr")
@@ -199,7 +189,7 @@ def run_make_hist(
             ctx=ctx,
             jagged_reference=jagged_reference,
         )
-        return {"hist": h}
+        return h
 
     if storage == "weighted":
         if not (isinstance(weight_expr, str) and weight_expr.strip()):
@@ -216,7 +206,7 @@ def run_make_hist(
         fill_kwargs["weight"] = _flatten_for_hist(weight_arr)
 
     h.fill(**fill_kwargs)
-    return {"hist": h}
+    return h
 
 
 def _fill_hist_variations(
@@ -357,7 +347,6 @@ def run_hist_transform(
     ctx=None,
     **kwargs,
 ):
-    stream = unwrap_legacy_data_envelope(stream)
     legacy_axes = list(axes)
     if dataset_axis is not None:
         legacy_axes.append(dataset_axis)
@@ -370,10 +359,4 @@ def run_hist_transform(
     if variations is not None:
         legacy_params["variations"] = variations
 
-    out = run_make_hist(
-        data=legacy_data_envelope(stream),
-        params=legacy_params,
-        ctx=ctx or {},
-        **kwargs,
-    )
-    return out["hist"]
+    return run_make_hist(stream, legacy_params, ctx or {}, **kwargs)

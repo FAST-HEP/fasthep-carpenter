@@ -6,16 +6,11 @@ import awkward as ak
 import numpy as np
 from hepflow.compiler.expr_symbols import data_symbols_in_expr
 from hepflow.model.data_flow import DataDependencyResult
-from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 from hepflow.registry.defaults import default_expr_registry
 from hepflow.runtime.engine import eval_expr
 
 from fasthep_carpenter.operations._selection import materialize_selection_flag
 from fasthep_carpenter.operations._validation import validate_event_mask
-from fasthep_carpenter.runtime.compat import (
-    legacy_data_envelope,
-    unwrap_legacy_data_envelope,
-)
 
 CUTFLOW_MASK_GUIDANCE = (
     "hep.selection.cutflow expressions must produce one boolean per event "
@@ -94,8 +89,8 @@ def parse_cutflow_column_dependencies(
 
 
 def run_cutflow(
-    data: dict[str, Any], params: dict[str, Any], ctx: dict[str, Any]
-) -> dict[str, Any]:
+    events: ak.Array, params: dict[str, Any], ctx: dict[str, Any]
+) -> tuple[ak.Array, dict[str, Any]]:
     """
     params:
       weight: optional str column name
@@ -104,13 +99,8 @@ def run_cutflow(
           - {expr: "..."}
           - {reduce: {op: any, over: "Muon_Pt > 25"}}
     Returns:
-      events: filtered events
-      cutflow: {"cuts":[{name, n, sumw, sumw2}, ...]}
+      (filtered events, {"cuts": [{name, n, sumw, sumw2}, ...]})
     """
-    events = data.get(
-        ctx["primary_stream"],
-        data.get(DEFAULT_PRIMARY_STREAM_ID, next(iter(data.values()))),
-    )
     weight_expr = params.get("weight_expr", params.get("weight"))
     if isinstance(weight_expr, str):
         w = (
@@ -169,7 +159,7 @@ def run_cutflow(
         )
 
     filtered = events if filter_mode == "none" else events[filter_mask]
-    return {DEFAULT_PRIMARY_STREAM_ID: filtered, "cutflow": {"cuts": cuts}}
+    return filtered, {"cuts": cuts}
 
 
 def run_cutflow_transform(
@@ -181,8 +171,6 @@ def run_cutflow_transform(
     ctx=None,
     **kwargs,
 ):
-    stream = unwrap_legacy_data_envelope(stream)
-    legacy_data = legacy_data_envelope(stream)
     legacy_params = {
         "selection": selection,
     }
@@ -192,14 +180,10 @@ def run_cutflow_transform(
         legacy_params["output_field"] = output_field
     legacy_params["filter"] = kwargs.pop("filter", "all")
     legacy_params["emit_flags"] = kwargs.pop("emit_flags", True)
-    legacy_ctx = ctx or {}
-    if "primary_stream" not in legacy_ctx:
-        legacy_ctx["primary_stream"] = DEFAULT_PRIMARY_STREAM_ID
-
-    out = run_cutflow(
-        data=legacy_data,
-        params=legacy_params,
-        ctx=legacy_ctx,
+    filtered, cutflow = run_cutflow(
+        stream,
+        legacy_params,
+        dict(ctx or {}),
     )
     if ctx is not None and hasattr(ctx, "provenance"):
         deps = _runtime_dependencies(legacy_params, dict(ctx or {}))
@@ -210,10 +194,7 @@ def run_cutflow_transform(
             inputs={"symbols": sorted(deps.consumes)},
             outputs={"symbols": output_symbols},
         )
-    return {
-        "stream": out[DEFAULT_PRIMARY_STREAM_ID],
-        "cutflow": out["cutflow"],
-    }
+    return {"stream": filtered, "cutflow": cutflow}
 
 
 def _runtime_dependencies(

@@ -11,15 +11,8 @@ from hepflow.compiler.data_flow import (
     DependencyContext,
     parse_component_data_dependencies,
 )
-from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
 from hepflow.registry.defaults import default_expr_registry
 from hepflow.runtime.engine import eval_expr
-
-from fasthep_carpenter.runtime.compat import (
-    legacy_data_envelope,
-    unwrap_legacy_data_envelope,
-)
-from fasthep_carpenter.runtime.stream_readers import get_stream_array
 
 vector.register_awkward()
 
@@ -98,19 +91,11 @@ BUILD_LEPTON_MET_CANDIDATE_SPEC = {
 
 
 def run_build_lepton_met_candidate(
-    data: dict[str, Any],
+    events: ak.Array,
     params: dict[str, Any],
     ctx: dict[str, Any],
-) -> dict[str, Any]:
-    stream_name = (
-        params.get("stream")
-        or params.get("stream_id")
-        or ctx.get("primary_stream")
-        or DEFAULT_PRIMARY_STREAM_ID
-    )
-    events = _normalise_stream(get_stream_array(data, str(stream_name)))
-    out = _run_build_lepton_met_candidate_on_stream(events, params, ctx)
-    return {DEFAULT_PRIMARY_STREAM_ID: out}
+) -> ak.Array:
+    return _run_build_lepton_met_candidate_on_stream(_normalise_stream(events), params, ctx)
 
 
 def run_build_lepton_met_candidate_transform(
@@ -125,7 +110,6 @@ def run_build_lepton_met_candidate_transform(
     **kwargs: Any,
 ) -> Any:
     del kwargs
-    stream = unwrap_legacy_data_envelope(stream)
     params: dict[str, Any] = {
         "lepton": lepton,
         "met": met,
@@ -136,7 +120,7 @@ def run_build_lepton_met_candidate_transform(
         params["selection"] = selection
 
     out = run_build_lepton_met_candidate(
-        data=legacy_data_envelope(stream),
+        events=stream,
         params=params,
         ctx=dict(ctx or {}),
     )
@@ -146,7 +130,7 @@ def run_build_lepton_met_candidate_transform(
             inputs={"symbols": sorted(deps.consumes)},
             outputs={"symbols": sorted(deps.produces)},
         )
-    return get_stream_array(out, DEFAULT_PRIMARY_STREAM_ID)
+    return out
 
 
 def _run_build_lepton_met_candidate_on_stream(

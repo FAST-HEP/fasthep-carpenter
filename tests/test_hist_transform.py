@@ -119,16 +119,16 @@ def _hist(events: ak.Array, *, storage: str, weight_expr: str | None = None):
         params["weight_expr"] = weight_expr
 
     return run_make_hist(
-        data={"events": events},
-        params=params,
-        ctx={"primary_stream": "events", "dataset_name": "sample"},
-    )["hist"]
+        events,
+        params,
+        {"dataset_name": "sample"},
+    )
 
 
 def _variation_hist(events: ak.Array, *, dataset_name: str, eventtype: str):
     return run_make_hist(
-        data={"events": events},
-        params={
+        events,
+        {
             "axes": [
                 {
                     "name": "dataset",
@@ -160,9 +160,8 @@ def _variation_hist(events: ak.Array, *, dataset_name: str, eventtype: str):
                 },
             },
         },
-        ctx={
-            "primary_stream": "events",
+        {
             "dataset_name": dataset_name,
             "dataset": {"eventtype": eventtype},
         },
-    )["hist"]
+    )

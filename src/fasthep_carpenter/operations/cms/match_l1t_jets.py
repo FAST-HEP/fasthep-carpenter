@@ -6,12 +6,6 @@ import awkward as ak
 import numpy as np
 from hepflow.compiler.expr_symbols import data_symbols_in_expr
 from hepflow.model.data_flow import DataDependencyResult
-from hepflow.model.defaults import DEFAULT_PRIMARY_STREAM_ID
-
-from fasthep_carpenter.runtime.compat import (
-    legacy_data_envelope,
-    unwrap_legacy_data_envelope,
-)
 
 MATCH_L1T_JETS_OUTPUTS = {
     "n_matched",
@@ -94,8 +88,8 @@ def _wrap_delta_phi(dphi: ak.Array) -> ak.Array:
 
 
 def run_match_l1t_jets(
-    data: dict[str, Any], params: dict[str, Any], ctx: dict[str, Any]
-) -> dict[str, Any]:
+    events: ak.Array, params: dict[str, Any], ctx: dict[str, Any]
+) -> ak.Array:
     """
     Per event:
       - For each reco jet, find the closest L1 jet in ΔR
@@ -106,15 +100,8 @@ def run_match_l1t_jets(
       - matched_l1_et (jagged)
       - unmatched_dr (jagged; closest ΔR for reco jets that did not match)
     """
+    del ctx
     dr_max = float(params.get("dr_max", 0.4))
-    stream_name = (
-        params.get("stream") or ctx.get("primary_stream") or DEFAULT_PRIMARY_STREAM_ID
-    )
-    if stream_name not in data:
-        msg = f"missing stream: {stream_name}"
-        raise KeyError(msg)
-    events: dict[str, ak.Array] = data[stream_name]
-
     reco_et = events[params["reco"]["et"]]
     reco_eta = events[params["reco"]["eta"]]
     reco_phi = events[params["reco"]["phi"]]
@@ -163,13 +150,10 @@ def run_match_l1t_jets(
     unmatched_dr = ak.min(dr_flat)  # scalar per event (None if empty)
 
     # Add columns onto the *same* events record
-    out_events = events
-    out_events = ak.with_field(out_events, n_matched, "n_matched")
+    out_events = ak.with_field(events, n_matched, "n_matched")
     out_events = ak.with_field(out_events, matched_reco_et, "matched_reco_et")
     out_events = ak.with_field(out_events, matched_l1_et, "matched_l1_et")
-    out_events = ak.with_field(out_events, unmatched_dr, "unmatched_dr")
-
-    return {"events": out_events}
+    return ak.with_field(out_events, unmatched_dr, "unmatched_dr")
 
 
 def run_match_l1t_jets_transform(
@@ -181,21 +165,10 @@ def run_match_l1t_jets_transform(
     ctx=None,
     **kwargs,
 ):
-    stream = unwrap_legacy_data_envelope(stream)
     legacy_params = {
         "reco": reco,
         "l1": l1,
         "dr_max": dr_max,
     }
 
-    out = run_match_l1t_jets(
-        data=legacy_data_envelope(stream),
-        params=legacy_params,
-        ctx={
-            **dict(ctx or {}),
-            "primary_stream": DEFAULT_PRIMARY_STREAM_ID,
-        },
-        **kwargs,
-    )
-
-    return legacy_data_envelope(out.get(DEFAULT_PRIMARY_STREAM_ID, out))
+    return run_match_l1t_jets(stream, legacy_params, dict(ctx or {}))
