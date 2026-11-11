@@ -200,8 +200,14 @@ def _build_recoil(events: ak.Array, *, met: str, visible: list[str]) -> ak.Array
         recoil_px = recoil_px + pt * np.cos(phi)
         recoil_py = recoil_py + pt * np.sin(phi)
 
-    pt = np.hypot(recoil_px, recoil_py)
-    phi = np.arctan2(recoil_py, recoil_px)
+    if visible:
+        pt = np.hypot(recoil_px, recoil_py)
+        phi = np.arctan2(recoil_py, recoil_px)
+    else:
+        # The recoil is the MET itself. Going through px and py only adds rounding noise, which can move a
+        # pt of exactly 200.0 below a `pt >= 200` selection.
+        pt = broadcast_met_pt
+        phi = broadcast_met_phi
     return ak.zip(
         {
             "pt": pt,

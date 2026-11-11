@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 
 import awkward as ak
+import numpy as np
 import pytest
 from hepflow.compiler.data_flow import (
     DependencyContext,
@@ -27,6 +28,21 @@ def test_met_only_builds_one_recoil_per_event() -> None:
     assert ak.to_list(abs(out.Recoil_phi - 0.5) < 1e-12) == [[True], []]
     assert ak.to_list(out.Recoil_eta) == [[0.0], []]
     assert ak.to_list(out.Recoil_mass) == [[0.0], []]
+
+
+def test_met_only_recoil_is_the_met_itself_on_a_threshold() -> None:
+    # Without visible objects the recoil is the MET: a pt of exactly 200.0 must stay 200.0 for `pt >= 200`.
+    # Going through px and py gives 199.99999999999997 here (METRun2022C run 356323 lumi 424 event 553922977).
+    met_phi = float(np.float32(-3.1367188))
+    out = _run(
+        _events(met_pt=[200.0], met_phi=[met_phi]),
+        visible=[],
+        selection=["pt >= 200"],
+    )
+
+    assert ak.to_list(out.nRecoil) == [1]
+    assert ak.to_list(out.Recoil_pt) == [[200.0]]
+    assert ak.to_list(out.Recoil_phi) == [[met_phi]]
 
 
 def test_visible_objects_are_added_to_met_not_subtracted() -> None:
