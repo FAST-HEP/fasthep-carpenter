@@ -8,6 +8,11 @@ import awkward as ak
 import uproot
 from hepflow.model.io import OutputResult
 
+# Default level of each codec when `compression_level` is not given (ROOT's recommended ZLIB-1, LZ4-4 and ZSTD-5; LZMA-4
+# is close to LZMA-9 in size at about three quarters of the time).
+DEFAULT_COMPRESSION = "zstd"
+DEFAULT_COMPRESSION_LEVELS = {"zlib": 1, "lzma": 4, "lz4": 4, "zstd": 5, "none": 0}
+
 ROOT_TREE_WRITE_SPEC = {
     "name": "root_tree",
     "kind": "writer",
@@ -26,10 +31,10 @@ ROOT_TREE_WRITE_SPEC = {
         "compression": {
             "type": "string",
             "required": False,
-            "default": "zlib",
-            "allowed": ["zlib", "lz4", "zstd", "none"],
+            "default": DEFAULT_COMPRESSION,
+            "allowed": ["zlib", "lzma", "lz4", "zstd", "none"],
         },
-        "compression_level": {"type": "integer", "required": False, "default": 1},
+        "compression_level": {"type": "integer", "required": False, "default": None},
         "shared_counters": {"type": "boolean", "required": False, "default": False},
         "mode": {
             "type": "string",
@@ -60,8 +65,8 @@ def run_root_tree_write(
     tree: str = "events",
     keep: list[str] | None = None,
     format: str = "rntuple",
-    compression: str = "zlib",
-    compression_level: int = 1,
+    compression: str = DEFAULT_COMPRESSION,
+    compression_level: int | None = None,
     shared_counters: bool = False,
     mode: str = "recreate",
     ctx: dict[str, Any] | None = None,
@@ -100,6 +105,8 @@ def run_root_tree_write(
     output_path = Path(path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    if compression_level is None:
+        compression_level = DEFAULT_COMPRESSION_LEVELS.get(compression, 1)
     compression_arg = _resolve_compression(compression, compression_level)
 
     payload = {field: array[field] for field in array.fields}
@@ -312,6 +319,8 @@ def _resolve_compression(name: str, level: int) -> Any:
         return None
     if name == "zlib":
         return uproot.ZLIB(level)
+    if name == "lzma":
+        return uproot.LZMA(level)
     if name == "lz4":
         return uproot.LZ4(level)
     if name == "zstd":
