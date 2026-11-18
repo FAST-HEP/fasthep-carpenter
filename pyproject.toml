@@ -28,6 +28,7 @@ dependencies = [
     "awkward",
     "fsspec-xrootd",
     "uproot",
+    "zstandard; python_version < '3.14'",  # uproot's ZSTD codec (the standard library has it from 3.14)
     "numpy",
     "hist",
     "vector",
