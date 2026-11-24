@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import struct
 from pathlib import Path
+from typing import Any
 
 import awkward as ak
 import numpy as np
@@ -333,3 +335,91 @@ def test_single_key_dict_target_is_a_record_not_an_envelope(tmp_path: Path) -> N
     assert result.metadata["branches"] == ["events"]
     with uproot.open(tmp_path / "record.root") as root_file:
         assert root_file["events"]["events"].array().tolist() == [1, 2, 3]
+
+
+def _large_payload() -> ak.Array:
+    # baskets under ~256 bytes are stored raw, so the codec is only used on enough data
+    values: np.ndarray[Any, Any] = np.arange(20000) % 17
+    return ak.Array({"x": values.astype(np.float64), "n": values.astype(np.int32)})
+
+
+def _file_compression(path: Path) -> Any:
+    with uproot.open(path) as root_file:
+        return root_file.file.compression
+
+
+def _first_basket_tag(path: Path, branch: str) -> bytes:
+    """The two byte codec tag of the first basket (ZL zlib, XZ lzma, ZS zstd, L4 lz4), or b'' when stored raw."""
+    with uproot.open(path) as root_file:
+        tree = root_file["Events"]
+        seek = int(tree[branch].member("fBasketSeek")[0])
+        raw = root_file.file.source.chunk(seek, seek + 256).raw_data.tobytes()
+    stored, _version, raw_length, _date, key_length = struct.unpack(">iHiIH", raw[:16])
+    return b"" if stored - key_length == raw_length else raw[key_length : key_length + 2]
+
+
+def test_default_compression_is_zstd_level_5(tmp_path: Path) -> None:
+    result = run_root_tree_write(_payload(), path=str(tmp_path / "t.root"), tree="Events", format="ttree")
+
+    assert result.metadata["compression"] == "zstd"
+    assert result.metadata["compression_level"] == 5
+    compression = _file_compression(tmp_path / "t.root")
+    assert isinstance(compression, uproot.ZSTD)
+    assert compression.level == 5
+
+
+@pytest.mark.parametrize(
+    ("name", "codec", "level", "tag"),
+    [("zlib", uproot.ZLIB, 1, b"ZL"), ("lzma", uproot.LZMA, 4, b"XZ"), ("zstd", uproot.ZSTD, 5, b"ZS")],
+)
+def test_each_codec_without_a_level_uses_its_own_default_level(
+    tmp_path: Path, name: str, codec: Any, level: int, tag: bytes
+) -> None:
+    path = tmp_path / f"{name}.root"
+
+    result = run_root_tree_write(_large_payload(), path=str(path), tree="Events", format="ttree", compression=name)
+
+    assert result.metadata["compression_level"] == level
+    compression: Any = _file_compression(path)
+    assert isinstance(compression, codec)
+    assert compression.level == level
+    assert _first_basket_tag(path, "x") == tag  # the baskets really carry the codec
+
+
+def test_an_explicit_level_wins_over_the_codec_default(tmp_path: Path) -> None:
+    path = tmp_path / "l.root"
+
+    result = run_root_tree_write(
+        _payload(), path=str(path), tree="Events", format="ttree", compression="lzma", compression_level=7
+    )
+
+    assert result.metadata["compression_level"] == 7
+    assert _file_compression(path).level == 7
+
+
+def test_no_compression_stores_the_baskets_raw(tmp_path: Path) -> None:
+    path = tmp_path / "none.root"
+
+    run_root_tree_write(_large_payload(), path=str(path), tree="Events", format="ttree", compression="none")
+
+    assert _first_basket_tag(path, "x") == b""
+
+
+@pytest.mark.parametrize("output_format", ["rntuple", "ttree"])
+@pytest.mark.parametrize("name", ["zlib", "lzma", "zstd"])
+def test_compressed_output_reads_back_the_same_values(tmp_path: Path, output_format: str, name: str) -> None:
+    path = tmp_path / f"{name}_{output_format}.root"
+    payload = _large_payload()
+
+    run_root_tree_write(payload, path=str(path), tree="Events", format=output_format, compression=name)
+
+    with uproot.open(path) as root_file:
+        values = root_file["Events"]["x"].array(library="np")
+    assert values.tolist() == payload["x"].to_numpy().tolist()
+
+
+def test_the_spec_allows_lzma_and_defaults_to_zstd() -> None:
+    spec: dict[str, Any] = root_tree_sink.ROOT_TREE_WRITE_SPEC["params"]  # type: ignore[assignment]
+    assert "lzma" in spec["compression"]["allowed"]
+    assert spec["compression"]["default"] == "zstd"
+    assert spec["compression_level"]["default"] is None
