@@ -23,6 +23,7 @@ HIST_SPEC = {
     "result": {
         "hist": {"kind": "histogram", "description": "Filled histogram object."}
     },
+    "execution": {"scope": "partition"},
     "requires": {
         "symbols": [
             {

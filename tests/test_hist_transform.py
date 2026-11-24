@@ -165,3 +165,9 @@ def _variation_hist(events: ak.Array, *, dataset_name: str, eventtype: str):
             "dataset": {"eventtype": eventtype},
         },
     )
+
+
+def test_hist_spec_declares_partition_scope() -> None:
+    from fasthep_carpenter.operations.hist import HIST_SPEC  # noqa: PLC0415
+
+    assert HIST_SPEC["execution"] == {"scope": "partition"}
