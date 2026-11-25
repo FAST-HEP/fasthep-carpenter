@@ -57,6 +57,8 @@ def test_explicit_root_tree_format_round_trips_scalar_and_jagged_branches(
     manifest = result.metadata["writer_manifest"]
     assert manifest["format"] == output_format
     assert manifest["root_classname"] == classname
+    # Flow records the location, size and checksum of the file; the sink does not.
+    assert not {"path", "path_type", "size_bytes", "adler32"} & manifest.keys()
 
     with uproot.open(output_path) as root_file:
         tree = root_file["Events"]

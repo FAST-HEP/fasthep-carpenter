@@ -257,10 +257,7 @@ def _manifest_record(
     meta: dict[str, Any],
 ) -> dict[str, Any]:
     partition = dict(ctx.get("partition") or {})
-    path, path_type = manifest_path(
-        output_path,
-        Path(str(ctx.get("outdir") or ".")),
-    )
+    # Flow records the file's location, size and checksum when it stores the result.
     return {
         "kind": "root_tree",
         "name": str(meta.get("writer_name") or output_path.stem),
@@ -269,24 +266,12 @@ def _manifest_record(
         "tree": tree,
         "format": output_format,
         "root_classname": root_classname,
-        "path": path,
-        "path_type": path_type,
         "dataset": str(ctx.get("dataset_name") or partition.get("dataset") or "dataset"),
         "partition_id": partition.get("id"),
         "partition": _partition_index(partition),
         "attempt": int(ctx.get("attempt") or 0),
         "entries": entries,
-        "size_bytes": output_path.stat().st_size,
     }
-
-
-def manifest_path(path: Path, outdir: Path) -> tuple[str, str]:
-    resolved = path.resolve()
-    resolved_outdir = outdir.resolve()
-    try:
-        return resolved.relative_to(resolved_outdir).as_posix(), "relative_to_outdir"
-    except ValueError:
-        return resolved.as_posix(), "absolute"
 
 
 def _set_reference_field(result: OutputResult, name: str, value: Any) -> None:
