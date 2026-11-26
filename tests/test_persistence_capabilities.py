@@ -140,3 +140,135 @@ def test_outcome_names_the_payload(tmp_path: Path) -> None:
     outcome = save_histogram(h, root=tmp_path, params={}, identity=IDENTITY)
 
     assert [(p.path, p.role) for p in outcome.payloads] == [("hist.json", "data")]
+
+
+# -- cutflow -----------------------------------------------------------------
+
+
+def _cutflow_round_trip(value: dict[str, Any], tmp_path: Path) -> dict[str, Any]:
+    from fasthep_carpenter.products.persistence import (  # noqa: PLC0415
+        load_cutflow,
+        save_cutflow,
+    )
+
+    outcome = save_cutflow(value, root=tmp_path, params={}, identity=IDENTITY)
+    paths = [tmp_path / payload.path for payload in outcome.payloads]
+    return load_cutflow(tmp_path, paths, params={}, variant=None, locator=None)
+
+
+def test_cutflow_round_trip_keeps_order_and_number_kinds(tmp_path: Path) -> None:
+    value = {
+        "dataset": "Zmumu",
+        "cuts": [
+            {"name": "b", "n_in": 10, "n_out": 5, "sumw_out": 4.5},
+            {"name": "a", "n_in": 5, "n_out": 5, "sumw_out": 5.0},
+        ],
+    }
+
+    back = _cutflow_round_trip(value, tmp_path)
+
+    assert back == value
+    assert [row["name"] for row in back["cuts"]] == ["b", "a"]
+    assert isinstance(back["cuts"][0]["n_in"], int)
+    assert isinstance(back["cuts"][1]["sumw_out"], float)
+
+
+def test_cutflow_non_finite_floats_round_trip(tmp_path: Path) -> None:
+    value = {"cuts": [{"name": "x", "sumw": math.nan, "sumw2": math.inf}]}
+
+    back = _cutflow_round_trip(value, tmp_path)
+
+    assert math.isnan(back["cuts"][0]["sumw"])
+    assert back["cuts"][0]["sumw2"] == math.inf
+
+
+def test_cutflow_numpy_scalars_are_stored_as_numbers(tmp_path: Path) -> None:
+    value = {"cuts": [{"name": "x", "n": np.int64(3), "sumw": np.float64(1.5)}]}
+
+    back = _cutflow_round_trip(value, tmp_path)
+
+    assert back == {"cuts": [{"name": "x", "n": 3, "sumw": 1.5}]}
+
+
+def test_cutflow_rejects_values_that_are_not_data(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="cutflow"):
+        _cutflow_round_trip({"cuts": [object()]}, tmp_path)
+
+
+def test_cutflow_must_be_a_dict(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="dict"):
+        _cutflow_round_trip([1, 2], tmp_path)  # type: ignore[arg-type]
+
+
+# -- registry and Flow ---------------------------------------------------------
+
+
+def _carpenter_registry() -> Any:
+    from importlib import resources  # noqa: PLC0415
+
+    import yaml  # noqa: PLC0415
+    from hepflow.registry.loaders import resolve_runtime_registry  # noqa: PLC0415
+
+    text = (
+        resources.files("fasthep_carpenter.profiles")
+        .joinpath("registry.yaml")
+        .read_text(encoding="utf-8")
+    )
+    return resolve_runtime_registry(yaml.safe_load(text)["registry"])
+
+
+def test_registry_declares_both_capabilities() -> None:
+    handlers = _carpenter_registry().product_handlers
+
+    histogram = handlers["histogram"].persistence["histogram.data"]
+    cutflow = handlers["cutflow"].persistence["cutflow.json"]
+    assert (histogram.version, histogram.container) == ("1", "json")
+    assert (cutflow.version, cutflow.container) == ("1", "json")
+    assert histogram.kind == "histogram"
+    assert cutflow.kind == "cutflow"
+    for capability in (histogram, cutflow):
+        assert callable(capability.save)
+        assert callable(capability.load)
+        assert capability.payload_roles == ("data",)
+        assert capability.fidelity
+
+
+def test_persist_and_restore_through_flow(tmp_path: Path) -> None:
+    from hepflow.api import restore_products  # noqa: PLC0415
+    from hepflow.model.persistence import PersistenceSettings  # noqa: PLC0415
+    from hepflow.model.plan import ExecutionPlan  # noqa: PLC0415
+    from hepflow.model.products import BoundaryProduct  # noqa: PLC0415
+    from hepflow.runtime.persistence.save import (  # noqa: PLC0415
+        persist_boundary_products,
+    )
+    from hepflow.runtime.persistence.select import (  # noqa: PLC0415
+        PersistenceSelection,
+    )
+
+    registry = _carpenter_registry()
+    h: hist.Hist = hist.Hist(
+        hist.axis.Regular(3, 0, 3, name="x"), storage=hist.storage.Weight()
+    )
+    h.fill(x=[0.5, 1.5, 7.0], weight=[1.0, 2.0, 3.0])
+    product = BoundaryProduct(
+        node_id="stage.H",
+        output_name="hist",
+        kind="histogram",
+        dataset="Zmumu",
+        partition_id="p0",
+        representation="persist",
+        value=h,
+    )
+    capability = registry.product_handlers["histogram"].persistence["histogram.data"]
+
+    [saved] = persist_boundary_products(
+        [product],
+        PersistenceSelection(persisted={product.key(): capability}),
+        plan=ExecutionPlan(),
+        settings=PersistenceSettings(mode="all"),
+        outdir=tmp_path,
+    )
+    restored = restore_products(saved.metadata["persisted"], registry=registry)
+
+    [back] = restored.products.values()
+    _same(h, back)

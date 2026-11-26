@@ -20,6 +20,8 @@ from hepflow.model.persistence import SavedPayload, SaveOutcome
 
 HISTOGRAM_FORMAT_VERSION = "1"
 HISTOGRAM_PAYLOAD = "hist.json"
+CUTFLOW_FORMAT_VERSION = "1"
+CUTFLOW_PAYLOAD = "cutflow.json"
 
 _NON_FINITE = {"nan": math.nan, "inf": math.inf, "-inf": -math.inf}
 
@@ -201,3 +203,53 @@ def _json_metadata(metadata: Any, where: str) -> Any:
             f"histogram.data cannot store non-JSON metadata on {where}: {exc}"
         ) from exc
     return metadata
+
+
+def save_cutflow(
+    value: dict[str, Any],
+    *,
+    root: Path,
+    params: dict[str, Any],
+    identity: dict[str, Any],
+) -> SaveOutcome:
+    """Write a cutflow dict as ``cutflow.json``, keeping key and row order."""
+    del params, identity
+    if not isinstance(value, dict):
+        raise ValueError(f"cutflow.json stores a dict, not {type(value).__name__}")
+    root.mkdir(parents=True, exist_ok=True)
+    (root / CUTFLOW_PAYLOAD).write_text(
+        json.dumps(
+            {"format_version": CUTFLOW_FORMAT_VERSION, "cutflow": value},
+            default=_cutflow_default,
+        ),
+        encoding="utf-8",
+    )
+    return SaveOutcome(payloads=(SavedPayload(CUTFLOW_PAYLOAD, role="data"),))
+
+
+def load_cutflow(
+    root: Path,
+    payloads: Sequence[Path],
+    *,
+    params: dict[str, Any],
+    variant: str | None,
+    locator: str | None,
+) -> dict[str, Any]:
+    """Read a cutflow dict back from ``cutflow.json``."""
+    del root, params, variant, locator
+    document = json.loads(Path(payloads[0]).read_text(encoding="utf-8"))
+    if document.get("format_version") != CUTFLOW_FORMAT_VERSION:
+        raise ValueError(
+            f"cutflow.json format_version {document.get('format_version')!r} is not "
+            f"{CUTFLOW_FORMAT_VERSION!r}"
+        )
+    cutflow = document["cutflow"]
+    if not isinstance(cutflow, dict):
+        raise ValueError("cutflow.json does not hold a dict")
+    return cutflow
+
+
+def _cutflow_default(value: Any) -> Any:
+    if isinstance(value, np.generic):
+        return value.item()
+    raise ValueError(f"cutflow.json cannot store a {type(value).__name__} in a cutflow")

@@ -102,6 +102,18 @@ registry:
       combine: fasthep_carpenter.products:combine_histogram_products
       merge: fasthep_carpenter.products:merge_histogram_products
       materialize: fasthep_carpenter.products:materialize_histogram_product
+      persistence:
+        formats:
+          histogram.data:
+            version: "1"
+            container: json
+            payload_roles: [data]
+            fidelity: >-
+              Regular, StrCategory and IntCategory axes with their names, labels and
+              flow and growth flags; Double or Weight storage; values and variances
+              including flow bins, exactly. Other axis or storage types are refused.
+            save: fasthep_carpenter.products.persistence:save_histogram
+            load: fasthep_carpenter.products.persistence:load_histogram
 
     cutflow:
       boundary:
@@ -110,6 +122,17 @@ registry:
       combine: fasthep_carpenter.products:combine_cutflow_products
       merge: fasthep_carpenter.products:merge_cutflow_products
       materialize: fasthep_carpenter.products:materialize_cutflow_product
+      persistence:
+        formats:
+          cutflow.json:
+            version: "1"
+            container: json
+            payload_roles: [data]
+            fidelity: >-
+              The cutflow dict exactly: key and row order, integer versus float,
+              non-finite floats. NumPy scalars are stored as plain numbers.
+            save: fasthep_carpenter.products.persistence:save_cutflow
+            load: fasthep_carpenter.products.persistence:load_cutflow
 
   functions:
     sqrt: numpy:sqrt
