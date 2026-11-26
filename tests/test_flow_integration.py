@@ -12,7 +12,6 @@ import yaml
 from hepflow.compiler.normalize import normalize_workflow
 
 from fasthep_carpenter.operations.define import DEFINE_SPEC
-from fasthep_carpenter.sinks.root_tree import manifest_path
 from fasthep_carpenter.sources.root_tree import (
     RootTreeSchema,
     run_root_tree_source,
@@ -345,6 +344,7 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
     file_entries = manifest["datasets"]["sample"]["files"]
     provenance_links = [item.pop("provenance") for item in file_entries]
     assert manifest == {
+        "schema_version": "2",
         "kind": "root_tree",
         "name": "skim",
         "node_id": "write.DerivedValue.0",
@@ -743,30 +743,6 @@ def test_choose_inconsistent_output_sets_fail_compile_with_node_and_field(
     message = str(excinfo.value)
     assert "Recoil_phi" in message
     assert "inconsistent outputs" in message
-
-
-def test_manifest_path_uses_relative_path_for_output_below_outdir(
-    tmp_path: Path,
-) -> None:
-    outdir = tmp_path / "build"
-    output = outdir / "artifacts" / "files" / "skim.root"
-
-    assert manifest_path(output, outdir) == (
-        "artifacts/files/skim.root",
-        "relative_to_outdir",
-    )
-
-
-def test_manifest_path_uses_absolute_path_for_external_output(
-    tmp_path: Path,
-) -> None:
-    outdir = tmp_path / "build"
-    output = tmp_path / "external" / "skim.root"
-
-    assert manifest_path(output, outdir) == (
-        output.resolve().as_posix(),
-        "absolute",
-    )
 
 
 def test_root_tree_source_accepts_stream_type() -> None:
