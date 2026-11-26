@@ -10,6 +10,7 @@ import pytest
 import uproot
 import yaml
 from hepflow.compiler.normalize import normalize_workflow
+from hepflow.runtime.writer_manifests import WRITER_MANIFEST_SCHEMA_VERSION
 
 from fasthep_carpenter.operations.define import DEFINE_SPEC
 from fasthep_carpenter.sources.root_tree import (
@@ -344,7 +345,7 @@ def test_attached_root_tree_writer_produces_output_artifact(tmp_path: Path) -> N
     file_entries = manifest["datasets"]["sample"]["files"]
     provenance_links = [item.pop("provenance") for item in file_entries]
     assert manifest == {
-        "schema_version": "2",
+        "schema_version": WRITER_MANIFEST_SCHEMA_VERSION,
         "kind": "root_tree",
         "name": "skim",
         "node_id": "write.DerivedValue.0",

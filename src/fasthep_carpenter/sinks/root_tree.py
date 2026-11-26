@@ -137,7 +137,6 @@ def run_root_tree_write(
     result = OutputResult(
         kind="artifact",
         path=str(output_path),
-        format="root",
         metadata={
             "tree": tree,
             "format": output_format,
