@@ -32,6 +32,7 @@ def _same(a: hist.Hist, b: hist.Hist) -> None:
         assert list(left) == list(right)
     assert a.storage_type is b.storage_type
     np.testing.assert_array_equal(a.view(flow=True), b.view(flow=True))
+    assert a == b
 
 
 def test_round_trip_regular_double(tmp_path: Path) -> None:
@@ -173,13 +174,11 @@ def test_cutflow_round_trip_keeps_order_and_number_kinds(tmp_path: Path) -> None
     assert isinstance(back["cuts"][1]["sumw_out"], float)
 
 
-def test_cutflow_non_finite_floats_round_trip(tmp_path: Path) -> None:
-    value = {"cuts": [{"name": "x", "sumw": math.nan, "sumw2": math.inf}]}
+def test_cutflow_non_finite_floats_are_refused(tmp_path: Path) -> None:
+    value = {"cuts": [{"name": "x", "sumw": math.nan}]}
 
-    back = _cutflow_round_trip(value, tmp_path)
-
-    assert math.isnan(back["cuts"][0]["sumw"])
-    assert back["cuts"][0]["sumw2"] == math.inf
+    with pytest.raises(ValueError, match="cutflow"):
+        _cutflow_round_trip(value, tmp_path)
 
 
 def test_cutflow_numpy_scalars_are_stored_as_numbers(tmp_path: Path) -> None:
@@ -272,3 +271,94 @@ def test_persist_and_restore_through_flow(tmp_path: Path) -> None:
 
     [back] = restored.products.values()
     _same(h, back)
+
+
+# -- review fixes -----------------------------------------------------------------
+
+
+def _carpenter_histogram() -> hist.Hist:
+    from fasthep_carpenter.operations.hist import _make_hist  # noqa: PLC0415
+
+    return _make_hist(
+        [
+            {"type": "category", "name": "dataset"},
+            {"type": "int", "name": "njets"},
+            {"type": "bool", "name": "flag"},
+            {"type": "regular", "name": "x", "bins": {"nbins": 4, "low": 0, "high": 4}},
+        ],
+        "weighted",
+    )
+
+
+def test_a_restored_histogram_equals_and_merges_with_a_fresh_one(
+    tmp_path: Path,
+) -> None:
+    from fasthep_carpenter.products import merge_histogram_products  # noqa: PLC0415
+
+    h = _carpenter_histogram()
+    h.fill(dataset=["a"], njets=[2], flag=[1], x=[1.5], weight=[2.0])
+
+    back = _round_trip(h, tmp_path)
+
+    assert h == back
+    merged = merge_histogram_products([h, back], node=None, output_name="hist")
+    assert merged.values(flow=True).sum() == 2 * h.values(flow=True).sum()
+
+
+def test_an_empty_histogram_round_trips(tmp_path: Path) -> None:
+    h = _carpenter_histogram()
+
+    back = _round_trip(h, tmp_path)
+
+    assert h == back
+    assert back.view(flow=True).shape == h.view(flow=True).shape
+
+
+def test_regular_axis_with_a_transform_is_refused(tmp_path: Path) -> None:
+    h: hist.Hist = hist.Hist(
+        hist.axis.Regular(4, 1, 1000, name="x", transform=hist.axis.transform.log)
+    )
+
+    with pytest.raises(ValueError, match="transform"):
+        save_histogram(h, root=tmp_path, params={}, identity=IDENTITY)
+
+
+def test_circular_axis_is_refused(tmp_path: Path) -> None:
+    h: hist.Hist = hist.Hist(hist.axis.Regular(4, 0, 1, name="x", circular=True))
+
+    with pytest.raises(ValueError, match="circular"):
+        save_histogram(h, root=tmp_path, params={}, identity=IDENTITY)
+
+
+def test_histogram_name_label_and_axis_attributes_survive(tmp_path: Path) -> None:
+    axis = hist.axis.Regular(2, 0, 2, name="x")
+    axis.note = "kept"
+    h: hist.Hist = hist.Hist(axis, name="hname", label="hlabel")
+
+    back = _round_trip(h, tmp_path)
+
+    assert (back.name, back.label) == ("hname", "hlabel")
+    assert back.axes[0].note == "kept"
+    assert h == back
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        {1: "a"},
+        {"cuts": (1, 2)},
+        {"cuts": [{"a": 1}, {1: 2}]},
+    ],
+)
+def test_cutflow_refuses_what_json_would_change(tmp_path: Path, value: Any) -> None:
+    with pytest.raises(ValueError, match="cutflow"):
+        _cutflow_round_trip(value, tmp_path)
+
+
+@pytest.mark.parametrize("metadata", [{"a": (1, 2)}, {1: "x"}, {"a": math.nan}])
+def test_metadata_json_would_change_is_refused(tmp_path: Path, metadata: Any) -> None:
+    h: hist.Hist = hist.Hist(hist.axis.Regular(2, 0, 2, name="x"))
+    h.metadata = metadata
+
+    with pytest.raises(ValueError, match="metadata"):
+        save_histogram(h, root=tmp_path, params={}, identity=IDENTITY)

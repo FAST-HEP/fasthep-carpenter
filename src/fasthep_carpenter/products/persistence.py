@@ -24,6 +24,7 @@ CUTFLOW_FORMAT_VERSION = "1"
 CUTFLOW_PAYLOAD = "cutflow.json"
 
 _NON_FINITE = {"nan": math.nan, "inf": math.inf, "-inf": -math.inf}
+_HIST_INTERNAL = {"_variance_known", "metadata"}
 
 
 def save_histogram(
@@ -47,9 +48,14 @@ def save_histogram(
         document["variances"] = _encode(np.asarray(view["variance"]))
     else:
         document["values"] = _encode(np.asarray(value.view(flow=True)))
+    raw = {k: v for k, v in vars(value).items() if k not in _HIST_INTERNAL}
+    document["name"] = raw.pop("name", None)
+    document["label"] = raw.pop("label", None)
+    if raw:
+        document["attributes"] = _strict(raw, "histogram attributes")
     metadata = _histogram_metadata(value)
     if metadata is not None:
-        document["metadata"] = _json_metadata(metadata, "histogram")
+        document["metadata"] = _strict(metadata, "histogram metadata")
     root.mkdir(parents=True, exist_ok=True)
     (root / HISTOGRAM_PAYLOAD).write_text(
         json.dumps(document, sort_keys=True), encoding="utf-8"
@@ -75,17 +81,21 @@ def load_histogram(
         )
     axes = [_axis_from_dict(item) for item in document["axes"]]
     storage = document["storage"]
+    options = {"name": document.get("name"), "label": document.get("label")}
     h: hist.Hist
     if storage == "weight":
-        h = hist.Hist(*axes, storage=hist.storage.Weight())
+        h = hist.Hist(*axes, storage=hist.storage.Weight(), **options)
         view = h.view(flow=True)
-        view["value"] = _decode(document["values"])
-        view["variance"] = _decode(document["variances"])
+        view["value"] = _decode(document["values"], view.shape)
+        view["variance"] = _decode(document["variances"], view.shape)
     elif storage == "double":
-        h = hist.Hist(*axes, storage=hist.storage.Double())
-        h.view(flow=True)[...] = _decode(document["values"])
+        h = hist.Hist(*axes, storage=hist.storage.Double(), **options)
+        view = h.view(flow=True)
+        view[...] = _decode(document["values"], view.shape)
     else:
         raise ValueError(f"histogram.data storage {storage!r} is not supported")
+    for key, item in document.get("attributes", {}).items():
+        setattr(h, key, item)
     if "metadata" in document:
         h.metadata = document["metadata"]
     return h
@@ -105,16 +115,29 @@ def _storage_name(value: hist.Hist) -> str:
 def _axis_to_dict(axis: Any) -> dict[str, Any]:
     kind = type(axis).__name__
     traits = axis.traits
+    if traits.circular:
+        raise ValueError(
+            f"histogram.data does not store circular axes (axis {axis.name!r})"
+        )
+    raw = dict(vars(axis))
     common: dict[str, Any] = {
         "name": axis.name,
-        "label": axis.label,
+        "label": raw.pop("label", ""),  # raw: ``axis.label`` falls back to the name
         "underflow": bool(traits.underflow),
         "overflow": bool(traits.overflow),
         "growth": bool(traits.growth),
     }
+    raw.pop("name", None)
+    if raw:
+        common["attributes"] = _strict(raw, f"axis {axis.name!r} attributes")
     if axis.metadata is not None:
-        common["metadata"] = _json_metadata(axis.metadata, f"axis {axis.name!r}")
+        common["metadata"] = _strict(axis.metadata, f"axis {axis.name!r} metadata")
     if kind == "Regular":
+        if getattr(axis, "transform", None) is not None:
+            raise ValueError(
+                f"histogram.data does not store a Regular axis with a transform "
+                f"(axis {axis.name!r})"
+            )
         edges = axis.edges
         return {
             **common,
@@ -153,6 +176,8 @@ def _axis_from_dict(item: dict[str, Any]) -> Any:
         axis = hist.axis.IntCategory(item["categories"], **options)
     else:
         raise ValueError(f"histogram.data axis type {item['type']!r} is not supported")
+    for key, value in item.get("attributes", {}).items():
+        setattr(axis, key, value)
     if "metadata" in item:
         axis.metadata = item["metadata"]
     return axis
@@ -166,8 +191,9 @@ def _encode(array: np.ndarray) -> Any:
     return _walk(nested, _encode_scalar)
 
 
-def _decode(nested: Any) -> np.ndarray:
-    return np.asarray(_walk(nested, _decode_scalar), dtype=float)
+def _decode(nested: Any, shape: tuple[int, ...]) -> np.ndarray:
+    # reshape: tolist() of an empty (0, n) array is [], which loses the inner shape
+    return np.asarray(_walk(nested, _decode_scalar), dtype=float).reshape(shape)
 
 
 def _walk(value: Any, convert: Any) -> Any:
@@ -195,14 +221,17 @@ def _histogram_metadata(value: hist.Hist) -> Any:
         return value.metadata
 
 
-def _json_metadata(metadata: Any, where: str) -> Any:
+def _strict(value: Any, where: str) -> Any:
+    """``value`` if JSON stores it unchanged; otherwise refuse (no silent change)."""
     try:
-        json.dumps(metadata)
-    except TypeError as exc:
-        raise ValueError(
-            f"histogram.data cannot store non-JSON metadata on {where}: {exc}"
-        ) from exc
-    return metadata
+        if json.loads(json.dumps(value, allow_nan=False)) == value:
+            return value
+    except (TypeError, ValueError):
+        pass
+    raise ValueError(
+        f"histogram.data cannot store {where} unchanged as JSON (tuples, non-string "
+        f"keys, non-finite numbers and objects are refused): {value!r}"
+    )
 
 
 def save_cutflow(
@@ -216,11 +245,21 @@ def save_cutflow(
     del params, identity
     if not isinstance(value, dict):
         raise ValueError(f"cutflow.json stores a dict, not {type(value).__name__}")
+    plain = _plain(value)
+    try:
+        unchanged = json.loads(json.dumps(plain, allow_nan=False)) == plain
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"cutflow.json cannot store this cutflow: {exc}") from exc
+    if not unchanged:
+        raise ValueError(
+            "cutflow.json cannot store this cutflow unchanged as JSON (tuples and "
+            "non-string keys are refused)"
+        )
     root.mkdir(parents=True, exist_ok=True)
     (root / CUTFLOW_PAYLOAD).write_text(
         json.dumps(
-            {"format_version": CUTFLOW_FORMAT_VERSION, "cutflow": value},
-            default=_cutflow_default,
+            {"format_version": CUTFLOW_FORMAT_VERSION, "cutflow": plain},
+            allow_nan=False,
         ),
         encoding="utf-8",
     )
@@ -249,7 +288,14 @@ def load_cutflow(
     return cutflow
 
 
-def _cutflow_default(value: Any) -> Any:
+def _plain(value: Any) -> Any:
+    """NumPy scalars as plain numbers, recursively; everything else as it is."""
     if isinstance(value, np.generic):
         return value.item()
-    raise ValueError(f"cutflow.json cannot store a {type(value).__name__} in a cutflow")
+    if isinstance(value, dict):
+        return {_plain(key): _plain(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_plain(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_plain(item) for item in value)
+    return value

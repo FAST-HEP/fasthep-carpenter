@@ -110,8 +110,11 @@ registry:
             payload_roles: [data]
             fidelity: >-
               Regular, StrCategory and IntCategory axes with their names, labels and
-              flow and growth flags; Double or Weight storage; values and variances
-              including flow bins, exactly. Other axis or storage types are refused.
+              flow and growth flags, plus histogram name, label, metadata and plain
+              attributes; Double or Weight storage; values and variances including flow
+              bins, exactly (equal to the original under hist's own comparison).
+              Variable, Integer and Boolean axes, transformed or circular Regular axes,
+              other storage types and non-JSON metadata are refused.
             save: fasthep_carpenter.products.persistence:save_histogram
             load: fasthep_carpenter.products.persistence:load_histogram
 
@@ -129,8 +132,9 @@ registry:
             container: json
             payload_roles: [data]
             fidelity: >-
-              The cutflow dict exactly: key and row order, integer versus float,
-              non-finite floats. NumPy scalars are stored as plain numbers.
+              The cutflow dict exactly: key and row order, integer versus float.
+              NumPy scalars are stored as plain numbers. Tuples, non-string keys and
+              non-finite floats are refused, never changed.
             save: fasthep_carpenter.products.persistence:save_cutflow
             load: fasthep_carpenter.products.persistence:load_cutflow
 
