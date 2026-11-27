@@ -171,3 +171,61 @@ def test_hist_spec_declares_partition_scope() -> None:
     from fasthep_carpenter.operations.hist import HIST_SPEC  # noqa: PLC0415
 
     assert HIST_SPEC["execution"] == {"scope": "partition"}
+
+
+def test_hist_does_not_change_its_params() -> None:
+    import copy  # noqa: PLC0415
+
+    params = {
+        "axes": [
+            {
+                "name": "dataset",
+                "type": "category",
+                "source": "dataset_name",
+                "bins": None,
+            },
+            {
+                "name": "pt",
+                "type": "regular",
+                "source": "Muon_Pt",
+                "bins": {"nbins": 10, "low": 0, "high": 100},
+            },
+        ],
+        "storage": "count",
+    }
+    before = copy.deepcopy(params)
+
+    run_make_hist(
+        ak.Array({"Muon_Pt": [[10, 20], [30]]}),
+        params,
+        {"dataset_name": "dy", "dataset_names": ["data", "dy"]},
+    )
+
+    assert params == before
+
+
+def test_hist_dataset_axis_follows_each_partitions_context() -> None:
+    params = {
+        "axes": [
+            {
+                "name": "dataset",
+                "type": "category",
+                "source": "dataset_name",
+                "bins": None,
+            },
+            {
+                "name": "pt",
+                "type": "regular",
+                "source": "Muon_Pt",
+                "bins": {"nbins": 10, "low": 0, "high": 100},
+            },
+        ],
+        "storage": "count",
+    }
+    events = ak.Array({"Muon_Pt": [[10], [20]]})
+
+    first = run_make_hist(events, params, {"dataset_name": "data"})
+    second = run_make_hist(events, params, {"dataset_name": "dy"})
+
+    assert list(first.axes[0]) == ["data"]
+    assert list(second.axes[0]) == ["dy"]

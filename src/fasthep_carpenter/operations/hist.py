@@ -139,7 +139,8 @@ def _make_hist(axes: list[dict[str, Any]], storage: str) -> hist.Hist:
 def run_make_hist(
     events: ak.Array, params: dict[str, Any], ctx: dict[str, Any]
 ) -> hist.Hist:
-    axes = params["axes"]
+    # copies: the dataset axis is completed per partition and must not change the plan
+    axes = [dict(ax) for ax in params["axes"]]
     storage = params.get("storage", "count")
     weight_expr = params.get("weight_expr")
     variations = params.get("variations")
