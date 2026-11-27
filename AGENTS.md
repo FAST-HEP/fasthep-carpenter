@@ -47,6 +47,16 @@ It does not own the backend-neutral workflow engine:
   module such as `operations/_selection.py`, `operations/_validation.py`,
   `runtime/`, or a new private module.
 
+## Persistence Capabilities
+
+`products/persistence.py` holds the save and load callables that
+`profiles/registry.yaml` registers under `product_handlers.histogram.persistence` and
+`product_handlers.cutflow.persistence` (fasthep-flow `docs/execution/persistence.md`).
+`histogram.data` and `cutflow.json` are version "1": data-only JSON, no pickle, lossless
+for the axis and storage types carpenter creates, and an unsupported axis or storage type
+raises. A change of a stored layout bumps the capability version; there is no migration.
+Tests are in `tests/test_persistence_capabilities.py`.
+
 ## Important Locations
 
 - Public package: `src/fasthep_carpenter/`
